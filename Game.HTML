@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Craftright — Flappy Steve</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ width:100%;height:100%;overflow:hidden;background:#000;font-family:'Press Start 2P',monospace; }
+  #gameCanvas{ display:block;width:100%;height:100%;image-rendering:pixelated; }
+
+  /* HUD overlay */
+  #hud{
+    position:fixed;top:12px;left:50%;transform:translateX(-50%);
+    display:flex;gap:18px;align-items:center;z-index:10;pointer-events:none;
+  }
+  .hud-box{
+    background:rgba(0,0,0,0.55);border:3px solid #3b3a36;
+    border-radius:6px;padding:6px 12px;color:#fff;font-size:10px;
+    backdrop-filter:blur(2px);
+  }
+
+  /* Screens */
+  .screen{
+    position:fixed;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;z-index:20;
+    background:rgba(0,0,0,0.7);gap:16px;
+  }
+  .screen.hidden{ display:none; }
+  .screen-box{
+    background:rgba(231,223,198,0.95);border:5px solid #3b3a36;
+    border-radius:10px;padding:28px 36px;text-align:center;
+    box-shadow:6px 6px 0 rgba(0,0,0,0.4);max-width:360px;width:90%;
+  }
+  .screen-box h1{ font-size:13px;margin-bottom:6px;color:#3b3a36; }
+  .screen-box h2{ font-size:11px;margin-bottom:14px;color:#3b3a36; }
+  .screen-box p{ font-size:8px;color:#666;margin-bottom:6px;line-height:1.8; }
+  .btn{
+    display:inline-block;padding:12px 20px;margin-top:10px;
+    border:4px solid #3b3a36;border-radius:6px;cursor:pointer;
+    font-family:'Press Start 2P',monospace;font-size:9px;
+    box-shadow:4px 4px 0 rgba(0,0,0,0.3);transition:transform .1s;
+    background:linear-gradient(180deg,#a5d6a7,#66bb6a);
+  }
+  .btn:active{ transform:translate(2px,2px);box-shadow:none; }
+  .btn.red{ background:linear-gradient(180deg,#ffcccb,#ef9a9a); }
+  .btn.yellow{ background:linear-gradient(180deg,#fff9c4,#fff176); }
+  .btn.purple{ background:linear-gradient(180deg,#ce93d8,#ab47bc);color:#fff; }
+  .skin-grid{ display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0; }
+  .skin-opt{
+    padding:8px 4px;border:3px solid #3b3a36;border-radius:6px;
+    cursor:pointer;font-size:18px;text-align:center;background:#f6f2d8;
+  }
+  .skin-opt.selected{ border-color:#4caf50;background:#c8e6c9; }
+  #xp-earned-msg{ font-size:9px;color:#2e7d32;font-weight:bold; }
+  #hi-score-display{ font-size:8px;color:#7b3f00;margin-top:4px; }
+</style>
+</head>
+<body>
+
+<!-- START SCREEN -->
+<div class="screen" id="startScreen">
+  <div class="screen-box">
+    <h1>⛏️ Flappy Steve</h1>
+    <p>Dodge the obsidian walls!<br>Collect XP orbs!<br>Survive the Minecraft world!</p>
+    <div style="font-size:8px;color:#555;margin:6px 0">Choose your character:</div>
+    <div class="skin-grid">
+      <div class="skin-opt selected" data-skin="steve" onclick="selectSkin(this,'steve')">🧑<div style="font-size:6px;margin-top:3px">Steve</div></div>
+      <div class="skin-opt" data-skin="alex" onclick="selectSkin(this,'alex')">👩<div style="font-size:6px;margin-top:3px">Alex</div></div>
+      <div class="skin-opt" data-skin="chicken" onclick="selectSkin(this,'chicken')">🐔<div style="font-size:6px;margin-top:3px">Chicken</div></div>
+      <div class="skin-opt" data-skin="creeper" onclick="selectSkin(this,'creeper')">👾<div style="font-size:6px;margin-top:3px">Creeper</div></div>
+      <div class="skin-opt" data-skin="pig" onclick="selectSkin(this,'pig')">🐷<div style="font-size:6px;margin-top:3px">Pig</div></div>
+      <div class="skin-opt" data-skin="enderman" onclick="selectSkin(this,'enderman')">🖤<div style="font-size:6px;margin-top:3px">Enderman</div></div>
+    </div>
+    <div id="hi-score-display">Best: 0</div>
+    <div class="btn" onclick="startGame()">▶ Start Game</div>
+    <div class="btn red" style="margin-left:8px" onclick="goHome()">🏠 Home</div>
+  </div>
+</div>
+
+<!-- PAUSE SCREEN -->
+<div class="screen hidden" id="pauseScreen">
+  <div class="screen-box">
+    <h2>⏸ Game Paused</h2>
+    <div class="btn" onclick="resumeGame()">▶ Resume</div>
+    <div class="btn red" style="margin-left:8px" onclick="quitToMenu()">✖ Quit</div>
+  </div>
+</div>
+
+<!-- DEATH SCREEN -->
+<div class="screen hidden" id="deathScreen">
+  <div class="screen-box">
+    <h1 style="color:#c62828">☠ You Died!</h1>
+    <p id="death-score" style="font-size:11px;margin:8px 0;color:#3b3a36">Score: 0</p>
+    <p id="xp-earned-msg">+0 XP earned!</p>
+    <p id="hi-score-display2" style="font-size:8px;color:#7b3f00"></p>
+    <div style="margin-top:10px">
+      <div class="btn" onclick="startGame()">🔄 Try Again</div>
+      <div class="btn yellow" style="margin-left:8px" onclick="quitToMenu()">📋 Menu</div>
+      <div class="btn red" style="margin-left:8px" onclick="goHome()">🏠 Home</div>
+    </div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-box">⭐ <span id="score-display">0</span></div>
+  <div class="hud-box">❤️ <span id="lives-display">3</span></div>
+  <div class="hud-box">🌍 <span id="biome-display">Plains</span></div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════
+// FLAPPY STEVE — Full Minecraft Game
+// ═══════════════════════════════════════════════
+
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+
+// ── Responsive canvas ───────────────────────────
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', () => { resize(); });
+
+// ── Game State ──────────────────────────────────
+const GRAVITY   = 0.38;
+const FLAP      = -8;
+const PIPE_W    = 52;
+const GAP       = 170;
+const PIPE_SPEED_BASE = 2.8;
+
+let gameState   = 'menu'; // menu | playing | paused | dead
+let score       = 0;
+let hiScore     = parseInt(localStorage.getItem('craftright_flappy_hi') || '0');
+let lives       = 3;
+let frame       = 0;
+let selectedSkin= 'steve';
+let currentBiome= 0;
+let bgScrollX   = 0;
+let groundScrollX=0;
+
+const BIOMES = [
+  { name:'Plains',   sky1:'#87CEEB', sky2:'#b8e060', ground:'#5a9e28', underground:'#8B6914', accent:'#3d8a1a' },
+  { name:'Desert',   sky1:'#FF8C00', sky2:'#FFD580', ground:'#d4b45a', underground:'#8B6914', accent:'#c8a84b' },
+  { name:'Forest',   sky1:'#1a2e10', sky2:'#2a4a18', ground:'#1a3d0a', underground:'#0d2208', accent:'#2a6e12' },
+  { name:'Nether',   sky1:'#2a0000', sky2:'#600000', ground:'#3a0a0a', underground:'#200505', accent:'#8B0000' },
+  { name:'The End',  sky1:'#000008', sky2:'#08001a', ground:'#d4c87e', underground:'#bba858', accent:'#7B5EA7' },
+  { name:'Taiga',    sky1:'#0a0f1e', sky2:'#2d3561', ground:'#1e3d14', underground:'#0d2208', accent:'#c8ddc0' },
+];
+
+// ── Player ──────────────────────────────────────
+const player = {
+  x: 0, y: 0, vy: 0,
+  w: 36, h: 36,
+  angle: 0,
+  invincible: 0,
+  flapping: false,
+};
+
+// ── Pipes ────────────────────────────────────────
+let pipes = [];
+let orbs  = [];
+let particles = [];
+let clouds = [];
+
+// ── Background objects ──────────────────────────
+let bgObjects = [];
+
+// ── Audio (Web Audio API) ───────────────────────
+const AudioCtx2 = window.AudioContext || window.webkitAudioContext;
+let audioCtx2 = null;
+function getAudio() {
+  if (!audioCtx2) audioCtx2 = new AudioCtx2();
+  return audioCtx2;
+}
+
+function playTone(freq, type, dur, vol) {
+  try {
+    const ctx2 = getAudio();
+    const osc = ctx2.createOscillator();
+    const gain = ctx2.createGain();
+    osc.connect(gain); gain.connect(ctx2.destination);
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, ctx2.currentTime);
+    gain.gain.setValueAtTime(vol||0.15, ctx2.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx2.currentTime + dur);
+    osc.start(); osc.stop(ctx2.currentTime + dur + 0.01);
+  } catch(e) {}
+}
+
+function soundFlap() {
+  playTone(300,'square',0.06,0.08); playTone(400,'square',0.04,0.06);
+}
+function soundOrb() {
+  playTone(880,'sine',0.05,0.12); playTone(1100,'sine',0.05,0.1);
+}
+function soundHit() {
+  playTone(120,'sawtooth',0.2,0.2); playTone(80,'square',0.3,0.15);
+}
+function soundDie() {
+  [200,160,120,80].forEach((f,i) => {
+    setTimeout(()=>playTone(f,'sawtooth',0.15,0.18), i*80);
+  });
+}
+function soundScore() {
+  [523,659,784].forEach((f,i) => setTimeout(()=>playTone(f,'square',0.08,0.1), i*60));
+}
+
+// ── Skin definitions ────────────────────────────
+const SKINS = {
+  steve:    { color:'#C68642', body:'#6B8CFF', eye:'#3a2a1a', hair:'#5C3D1E', label:'Steve' },
+  alex:     { color:'#C68642', body:'#5C9E5C', eye:'#3a2a1a', hair:'#8B4513', label:'Alex' },
+  chicken:  { color:'#F5F5F5', body:'#F5F5F5', eye:'#333',    hair:'#DAA520', label:'Chicken' },
+  creeper:  { color:'#4CAF50', body:'#388E3C', eye:'#1B5E20', hair:'#2E7D32', label:'Creeper' },
+  pig:      { color:'#F4A5A5', body:'#F4A5A5', eye:'#8B2020', hair:'#E89090', label:'Pig' },
+  enderman: { color:'#1a1a2a', body:'#0d0d1a', eye:'#AA00FF', hair:'#000',    label:'Enderman' },
+};
+
+// ── Draw player character ───────────────────────
+function drawPlayer() {
+  const p = player;
+  const skin = SKINS[selectedSkin];
+  if (p.invincible > 0 && Math.floor(frame/4)%2 === 0) return;
+
+  ctx.save();
+  ctx.translate(p.x + p.w/2, p.y + p.h/2);
+  p.angle = Math.min(Math.max(p.vy * 3, -30), 70);
+  ctx.rotate(p.angle * Math.PI / 180);
+
+  const pw = p.w, ph = p.h;
+
+  if (selectedSkin === 'chicken') {
+    // Body
+    ctx.fillStyle = '#F5F5F5';
+    ctx.fillRect(-pw/2, -ph/2+4, pw, ph-8);
+    // Wing flap
+    const wing = Math.sin(frame * 0.4) * 4;
+    ctx.fillStyle = '#ddd';
+    ctx.fillRect(-pw/2-6, -ph/2+8+wing, 8, 10);
+    // Head
+    ctx.fillStyle = '#F5F5F5';
+    ctx.fillRect(-pw/2+6, -ph/2-2, pw-6, ph/2);
+    // Beak
+    ctx.fillStyle = '#DAA520';
+    ctx.fillRect(pw/2-6, -ph/2+4, 8, 5);
+    // Wattle
+    ctx.fillStyle = '#CC0000';
+    ctx.fillRect(pw/2-5, -ph/2+8, 5, 6);
+    // Eye
+    ctx.fillStyle = '#333';
+    ctx.fillRect(pw/2-10, -ph/2+2, 4, 4);
+    // Legs
+    ctx.fillStyle = '#DAA520';
+    ctx.fillRect(-pw/2+8, ph/2-4, 4, 6);
+    ctx.fillRect(-pw/2+18, ph/2-4, 4, 6);
+
+  } else if (selectedSkin === 'creeper') {
+    ctx.fillStyle = '#388E3C';
+    ctx.fillRect(-pw/2, -ph/2, pw, ph);
+    // Creeper face
+    ctx.fillStyle = '#1B5E20';
+    ctx.fillRect(-pw/2+4, -ph/2+6, 8, 7); ctx.fillRect(pw/2-12, -ph/2+6, 8, 7);
+    ctx.fillRect(-pw/2+8, -ph/2+13, 4, 4);
+    ctx.fillRect(-pw/2+4, -ph/2+17, 4, 6); ctx.fillRect(pw/2-8, -ph/2+17, 4, 6);
+    // Legs
+    ctx.fillStyle = '#2E7D32';
+    ctx.fillRect(-pw/2, ph/2-8, pw/2-2, 8); ctx.fillRect(2, ph/2-8, pw/2-2, 8);
+
+  } else if (selectedSkin === 'pig') {
+    ctx.fillStyle = '#F4A5A5';
+    ctx.fillRect(-pw/2, -ph/2, pw, ph);
+    // Snout
+    ctx.fillStyle = '#F08080';
+    ctx.fillRect(-pw/2+6, -ph/2+14, 14, 10);
+    ctx.fillStyle = '#8B2020';
+    ctx.fillRect(-pw/2+8, -ph/2+16, 4, 4); ctx.fillRect(-pw/2+15, -ph/2+16, 4, 4);
+    // Eyes
+    ctx.fillStyle = '#333';
+    ctx.fillRect(-pw/2+4, -ph/2+6, 5, 5); ctx.fillRect(pw/2-9, -ph/2+6, 5, 5);
+    // Ears
+    ctx.fillStyle = '#F08080';
+    ctx.fillRect(-pw/2, -ph/2-4, 8, 6); ctx.fillRect(pw/2-8, -ph/2-4, 8, 6);
+    // Legs
+    ctx.fillStyle = '#E89090';
+    ctx.fillRect(-pw/2, ph/2-8, pw/2-2, 8); ctx.fillRect(2, ph/2-8, pw/2-2, 8);
+
+  } else if (selectedSkin === 'enderman') {
+    // Very tall/thin
+    ctx.fillStyle = '#1a1a2a';
+    ctx.fillRect(-pw/2+6, -ph/2, pw-12, ph);
+    // Head
+    ctx.fillRect(-pw/2+4, -ph/2-4, pw-8, ph/2+4);
+    // Eyes
+    ctx.fillStyle = '#AA00FF';
+    ctx.fillRect(-pw/2+7, -ph/2, 6, 5); ctx.fillRect(pw/2-13, -ph/2, 6, 5);
+    // Particle effect
+    if (Math.random()>0.7) {
+      ctx.fillStyle = 'rgba(150,0,255,0.6)';
+      ctx.fillRect((-pw/2+Math.random()*pw)-2, (-ph/2+Math.random()*ph)-2, 4, 4);
+    }
+
+  } else {
+    // Steve / Alex — humanoid
+    // Legs
+    ctx.fillStyle = '#5B8FD0';
+    ctx.fillRect(-pw/2, ph/2-10, pw/2-2, 10);
+    ctx.fillStyle = '#4A7CC0';
+    ctx.fillRect(2, ph/2-10, pw/2-2, 10);
+    // Body
+    ctx.fillStyle = skin.body;
+    ctx.fillRect(-pw/2, -ph/2+8, pw, ph/2);
+    // Arms
+    const armSwing = Math.sin(frame*0.3)*4;
+    ctx.fillStyle = skin.color;
+    ctx.fillRect(-pw/2-8, -ph/2+10+armSwing, 8, pw/2);
+    ctx.fillRect(pw/2, -ph/2+10-armSwing, 8, pw/2);
+    // Head
+    ctx.fillStyle = skin.color;
+    ctx.fillRect(-pw/2+2, -ph/2-4, pw-4, ph/2+6);
+    // Eyes
+    ctx.fillStyle = skin.eye;
+    ctx.fillRect(-pw/2+6, -ph/2+2, 6, 5); ctx.fillRect(pw/2-12, -ph/2+2, 6, 5);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-pw/2+8, -ph/2+3, 3, 3); ctx.fillRect(pw/2-10, -ph/2+3, 3, 3);
+    // Hair
+    ctx.fillStyle = skin.hair;
+    ctx.fillRect(-pw/2+2, -ph/2-4, pw-4, 5);
+    if (selectedSkin === 'alex') {
+      ctx.fillStyle = skin.hair;
+      ctx.fillRect(pw/2-4, -ph/2, 4, 10);
+    }
+    // Elytra wings (gliding effect)
+    const elytra = Math.sin(frame*0.2)*3;
+    ctx.fillStyle = 'rgba(150,120,80,0.7)';
+    ctx.fillRect(-pw/2-12, -ph/2+6+elytra, 10, 18);
+    ctx.fillRect(pw/2+2, -ph/2+6-elytra, 10, 18);
+  }
+
+  ctx.restore();
+}
+
+// ── Draw pipe pair (Minecraft themed) ──────────────
+function drawPipe(pipe) {
+  const biome = BIOMES[currentBiome];
+  const topH   = pipe.topH;
+  const botY   = pipe.topH + GAP;
+  const botH   = canvas.height - botY;
+
+  // Block pattern for pipe
+  const blockSize = 16;
+  const colors = {
+    'Plains':  ['#7ec850','#5a9e28','#8B6914'],
+    'Desert':  ['#d4b45a','#c8a84b','#8B6914'],
+    'Forest':  ['#2a6e12','#1a5510','#0d3a08'],
+    'Nether':  ['#5a1a1a','#3a0a0a','#8B0000'],
+    'The End': ['#d4c87e','#c8b870','#7B5EA7'],
+    'Taiga':   ['#2E7D32','#1B5E20','#1a3d12'],
+  };
+  const bname = BIOMES[currentBiome].name;
+  const [c1,c2,c3] = colors[bname] || ['#7ec850','#5a9e28','#8B6914'];
+
+  // Top pipe
+  for (let y=0; y<topH; y+=blockSize) {
+    const bh = Math.min(blockSize, topH-y);
+    ctx.fillStyle = (Math.floor(y/blockSize)%2===0) ? c1 : c2;
+    ctx.fillRect(pipe.x, y, PIPE_W, bh);
+    // block border
+    ctx.strokeStyle = c3; ctx.lineWidth = 1;
+    ctx.strokeRect(pipe.x+0.5, y+0.5, PIPE_W-1, bh-1);
+  }
+  // Top cap
+  ctx.fillStyle = c3;
+  ctx.fillRect(pipe.x-4, topH-blockSize, PIPE_W+8, blockSize);
+  ctx.fillStyle = c1;
+  ctx.fillRect(pipe.x-4+2, topH-blockSize+2, PIPE_W+4, blockSize-4);
+  // stone detail
+  for(let i=0;i<3;i++) {
+    ctx.fillStyle='rgba(0,0,0,0.12)';
+    ctx.fillRect(pipe.x+i*14+4, topH-blockSize+4, 8, 8);
+  }
+
+  // Bottom pipe
+  for (let y=botY; y<canvas.height; y+=blockSize) {
+    const bh = Math.min(blockSize, canvas.height-y);
+    ctx.fillStyle = (Math.floor((y-botY)/blockSize)%2===0) ? c1 : c2;
+    ctx.fillRect(pipe.x, y, PIPE_W, bh);
+    ctx.strokeStyle = c3; ctx.lineWidth=1;
+    ctx.strokeRect(pipe.x+0.5, y+0.5, PIPE_W-1, bh-1);
+  }
+  // Bottom cap
+  ctx.fillStyle = c3;
+  ctx.fillRect(pipe.x-4, botY, PIPE_W+8, blockSize);
+  ctx.fillStyle = c1;
+  ctx.fillRect(pipe.x-4+2, botY+2, PIPE_W+4, blockSize-4);
+  for(let i=0;i<3;i++) {
+    ctx.fillStyle='rgba(0,0,0,0.12)';
+    ctx.fillRect(pipe.x+i*14+4, botY+4, 8, 8);
+  }
+}
+
+// ── Draw XP Orb ──────────────────────────────────
+function drawOrb(orb) {
+  const pulse = 0.7 + Math.sin(frame*0.15+orb.phase)*0.3;
+  const r = 10 * pulse;
+  // glow
+  const g = ctx.createRadialGradient(orb.x,orb.y,0,orb.x,orb.y,r*2.5);
+  g.addColorStop(0,'rgba(100,255,50,0.5)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(orb.x,orb.y,r*2.5,0,Math.PI*2); ctx.fill();
+  // orb body
+  const og = ctx.createRadialGradient(orb.x-r*0.3,orb.y-r*0.3,0,orb.x,orb.y,r);
+  og.addColorStop(0,'#CCFF44'); og.addColorStop(0.5,'#88CC00'); og.addColorStop(1,'#336600');
+  ctx.fillStyle=og; ctx.beginPath(); ctx.arc(orb.x,orb.y,r,0,Math.PI*2); ctx.fill();
+  // shine
+  ctx.fillStyle='rgba(255,255,255,0.6)';
+  ctx.beginPath(); ctx.arc(orb.x-r*0.3,orb.y-r*0.3,r*0.3,0,Math.PI*2); ctx.fill();
+}
+
+// ── Draw background ───────────────────────────────
+function drawBackground() {
+  const biome = BIOMES[currentBiome];
+  // Sky gradient
+  const g = ctx.createLinearGradient(0,0,0,canvas.height);
+  g.addColorStop(0, biome.sky1); g.addColorStop(1, biome.sky2);
+  ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Clouds / background elements
+  clouds.forEach(c => {
+    if (currentBiome === 3) { // Nether — ash
+      ctx.fillStyle=`rgba(80,20,0,0.4)`;
+      ctx.fillRect(c.x, c.y, c.w*0.6, 4);
+    } else if (currentBiome === 4) { // The End — stars
+      ctx.fillStyle=`rgba(200,150,255,0.6)`;
+      ctx.fillRect(c.x, c.y, 3, 3);
+    } else {
+      ctx.fillStyle=`rgba(255,255,255,${c.alpha})`;
+      ctx.fillRect(c.x, c.y, c.w, 12);
+      ctx.fillStyle=`rgba(255,255,255,${c.alpha*0.8})`;
+      ctx.fillRect(c.x+4, c.y-6, c.w-8, 8);
+    }
+  });
+
+  // Ground
+  const gndY = canvas.height - 60;
+  ctx.fillStyle = biome.ground;
+  ctx.fillRect(0, gndY, canvas.width, 20);
+  ctx.fillStyle = biome.underground;
+  ctx.fillRect(0, gndY+20, canvas.width, 40);
+
+  // Ground texture blocks
+  for (let x=~~(groundScrollX%32); x<canvas.width+32; x+=32) {
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    ctx.fillRect(x, gndY, 1, 20);
+    ctx.fillRect(x+16, gndY+10, 1, 10);
+  }
+
+  // Biome-specific background details
+  if (currentBiome === 0) { // Plains - trees
+    bgObjects.forEach(b => {
+      ctx.fillStyle='#5D4037'; ctx.fillRect(b.x, gndY-b.h, 10, b.h);
+      ctx.fillStyle='#2d6a12'; ctx.fillRect(b.x-15, gndY-b.h-25, 40, 30);
+      ctx.fillStyle='#3d8a1a'; ctx.fillRect(b.x-10, gndY-b.h-35, 30, 20);
+    });
+  } else if (currentBiome === 1) { // Desert - cacti
+    bgObjects.forEach(b => {
+      ctx.fillStyle='#2e7d32';
+      ctx.fillRect(b.x, gndY-b.h, 8, b.h);
+      ctx.fillRect(b.x-10, gndY-~~(b.h*0.6), 10, 6);
+      ctx.fillRect(b.x+8, gndY-~~(b.h*0.4), 10, 6);
+    });
+  } else if (currentBiome === 2) { // Forest - dense trees
+    bgObjects.forEach(b => {
+      ctx.fillStyle='#1B4E1A'; ctx.fillRect(b.x, gndY-b.h, 12, b.h);
+      ctx.fillStyle='#0d3a08'; ctx.fillRect(b.x-20, gndY-b.h-30, 50, 40);
+      ctx.fillStyle='#1a5510'; ctx.fillRect(b.x-14, gndY-b.h-45, 38, 25);
+    });
+  } else if (currentBiome === 3) { // Nether - pillars
+    bgObjects.forEach(b => {
+      ctx.fillStyle='#3a0a0a'; ctx.fillRect(b.x, gndY-b.h, 14, b.h);
+      // lava crack glow
+      ctx.fillStyle=`rgba(255,60,0,0.3)`;
+      ctx.fillRect(b.x+2, gndY-~~(b.h*0.5), 2, ~~(b.h*0.3));
+    });
+    // lava pools
+    bgObjects.forEach((b,i) => {
+      if(i%2===0) {
+        ctx.fillStyle='rgba(255,80,0,0.8)';
+        ctx.fillRect(b.x-10, gndY+2, 30, 10);
+      }
+    });
+  } else if (currentBiome === 4) { // The End
+    bgObjects.forEach(b => {
+      ctx.fillStyle='#1a0a2a'; ctx.fillRect(b.x, gndY-b.h, 10, b.h);
+      // crystal glow
+      const cg=Math.sin(frame*0.05+b.x)*0.5+0.5;
+      ctx.fillStyle=`rgba(150,50,255,${cg*0.3})`;
+      ctx.beginPath(); ctx.arc(b.x+5, gndY-b.h-5, 8, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle='#bf5fff'; ctx.fillRect(b.x+2, gndY-b.h-8, 6, 8);
+    });
+  } else if (currentBiome === 5) { // Taiga - pines
+    bgObjects.forEach(b => {
+      ctx.fillStyle='#5D4037'; ctx.fillRect(b.x, gndY-b.h, 8, b.h);
+      for(let i=0;i<3;i++) {
+        const w=(3-i)*14, py=gndY-b.h-10-i*16;
+        ctx.fillStyle= i%2===0?'#1B5E20':'#2E7D32';
+        ctx.fillRect(b.x-w/2+4, py, w, 14);
+      }
+      // snow on top
+      ctx.fillStyle='rgba(220,240,220,0.7)';
+      ctx.fillRect(b.x-8, gndY-b.h-44, 26, 6);
+    });
+  }
+}
+
+// ── Particles ─────────────────────────────────────
+function spawnParticles(x, y, color, count) {
+  for(let i=0;i<count;i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random()-0.5)*6,
+      vy: (Math.random()-0.5)*6 - 2,
+      life: 40, maxLife: 40,
+      color, size: 4+Math.random()*6
+    });
+  }
+}
+
+function updateParticles() {
+  particles = particles.filter(p => p.life > 0);
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life--;
+    const alpha = p.life / p.maxLife;
+    ctx.fillStyle = p.color.replace(')', `,${alpha.toFixed(2)})`).replace('rgb','rgba');
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+  });
+}
+
+// ── Init game ──────────────────────────────────────
+function initGame() {
+  score = 0; lives = 3; frame = 0;
+  currentBiome = 0; bgScrollX = 0; groundScrollX = 0;
+  player.x = canvas.width * 0.2;
+  player.y = canvas.height * 0.4;
+  player.vy = 0; player.invincible = 0;
+  pipes = []; orbs = []; particles = [];
+
+  // Init clouds
+  clouds = [];
+  for(let i=0;i<8;i++) {
+    clouds.push({ x:Math.random()*canvas.width, y:20+Math.random()*100, w:60+Math.random()*80, alpha:0.7+Math.random()*0.2 });
+  }
+
+  // Init bg objects
+  bgObjects = [];
+  for(let i=0;i<6;i++) {
+    bgObjects.push({ x: i*(canvas.width/5)+Math.random()*80, h:40+Math.random()*60 });
+  }
+
+  updateHUD();
+}
+
+// ── Spawn pipe ─────────────────────────────────────
+function spawnPipe() {
+  const minH = 60, maxH = canvas.height - GAP - 80 - 60;
+  const topH = minH + Math.random() * (maxH - minH);
+  pipes.push({ x: canvas.width + 20, topH, scored: false });
+
+  // Spawn XP orb in the gap
+  if (Math.random() > 0.35) {
+    orbs.push({
+      x: canvas.width + 20 + PIPE_W/2,
+      y: topH + GAP/2 + (Math.random()-0.5)*50,
+      phase: Math.random()*Math.PI*2,
+      collected: false
+    });
+  }
+}
+
+// ── Collision detection ────────────────────────────
+function checkCollision(pipe) {
+  const px = player.x, py = player.y;
+  const pw = player.w * 0.75, ph = player.h * 0.75; // tighter hitbox
+  const cx = px + player.w/2 - pw/2, cy = py + player.h/2 - ph/2;
+
+  const pipeLeft = pipe.x - 4, pipeRight = pipe.x + PIPE_W + 4;
+  if (cx + pw > pipeLeft && cx < pipeRight) {
+    if (cy < pipe.topH || cy + ph > pipe.topH + GAP) return true;
+  }
+  return false;
+}
+
+// ── Game speed based on score ──────────────────────
+function getPipeSpeed() { return PIPE_SPEED_BASE + score * 0.04; }
+function getPipeInterval() { return Math.max(55, 90 - score*0.3); }
+
+// ── Update HUD ─────────────────────────────────────
+function updateHUD() {
+  document.getElementById('score-display').textContent = score;
+  document.getElementById('lives-display').textContent = '❤️'.repeat(lives);
+  document.getElementById('biome-display').textContent = BIOMES[currentBiome].name;
+}
+
+// ── Main game loop ─────────────────────────────────
+let lastPipe = 0;
+let animId = null;
+
+function gameLoop() {
+  if (gameState !== 'playing') return;
+  frame++;
+
+  const spd = getPipeSpeed();
+
+  // Scroll backgrounds
+  bgScrollX -= spd * 0.3;
+  groundScrollX -= spd;
+  clouds.forEach(c => { c.x -= spd * 0.15; if(c.x < -c.w-20) c.x = canvas.width+20; });
+  bgObjects.forEach(b => { b.x -= spd * 0.4; if(b.x < -80) b.x = canvas.width + 80; });
+
+  // Physics
+  player.vy += GRAVITY;
+  player.y  += player.vy;
+  if (player.invincible > 0) player.invincible--;
+
+  // Ground collision
+  const gndY = canvas.height - 60;
+  if (player.y + player.h >= gndY) {
+    player.y = gndY - player.h;
+    if (player.invincible === 0) takeDamage();
+    player.vy = -3;
+  }
+  // Ceiling
+  if (player.y <= 0) { player.y = 0; player.vy = 2; }
+
+  // Spawn pipes
+  if (frame - lastPipe > getPipeInterval()) {
+    spawnPipe(); lastPipe = frame;
+  }
+
+  // Update pipes
+  pipes.forEach(p => {
+    p.x -= spd;
+    if (!p.scored && p.x + PIPE_W < player.x) {
+      p.scored = true; score++;
+      soundScore();
+      spawnParticles(player.x+player.w/2, player.y, 'rgb(255,220,50)', 8);
+      // Change biome every 8 points
+      if (score % 8 === 0) {
+        currentBiome = (currentBiome + 1) % BIOMES.length;
+        spawnParticles(canvas.width/2, canvas.height/2, 'rgb(100,200,255)', 20);
+      }
+      updateHUD();
+    }
+    // Collision check
+    if (player.invincible === 0 && checkCollision(p)) takeDamage();
+  });
+  pipes = pipes.filter(p => p.x > -PIPE_W - 20);
+
+  // Update orbs
+  orbs.forEach(o => {
+    o.x -= spd;
+    if (!o.collected) {
+      const dx = (player.x+player.w/2) - o.x;
+      const dy = (player.y+player.h/2) - o.y;
+      if (Math.sqrt(dx*dx+dy*dy) < 22) {
+        o.collected = true;
+        soundOrb();
+        spawnParticles(o.x, o.y, 'rgb(100,255,50)', 12);
+        score += 2; updateHUD();
+      }
+    }
+  });
+  orbs = orbs.filter(o => o.x > -20 && !o.collected);
+
+  // ── DRAW ──
+  drawBackground();
+
+  // Draw pipes
+  pipes.forEach(drawPipe);
+
+  // Draw orbs
+  orbs.forEach(drawOrb);
+
+  // Draw player
+  drawPlayer();
+
+  // Particles
+  updateParticles();
+
+  // Ground overlay
+  const grd = ctx.createLinearGradient(0, gndY-10, 0, gndY+10);
+  grd.addColorStop(0,'rgba(0,0,0,0)'); grd.addColorStop(1,'rgba(0,0,0,0.3)');
+  ctx.fillStyle=grd; ctx.fillRect(0,gndY-10,canvas.width,20);
+
+  animId = requestAnimationFrame(gameLoop);
+}
+
+// ── Take damage ─────────────────────────────────────
+function takeDamage() {
+  lives--;
+  soundHit();
+  player.invincible = 80;
+  spawnParticles(player.x+player.w/2, player.y+player.h/2, 'rgb(255,50,50)', 15);
+  updateHUD();
+  if (lives <= 0) endGame();
+}
+
+// ── End game ─────────────────────────────────────
+function endGame() {
+  gameState = 'dead';
+  soundDie();
+
+  // Save high score
+  if (score > hiScore) {
+    hiScore = score;
+    localStorage.setItem('craftright_flappy_hi', hiScore);
+  }
+
+  // Calculate XP earned and save to Craftright
+  const xpEarned = Math.floor(score * 2.5);
+  const state = JSON.parse(localStorage.getItem('craftrightState') || '{}');
+  if (state && xpEarned > 0) {
+    state.xp = (state.xp||0) + xpEarned;
+    state.totalXpEarned = (state.totalXpEarned||0) + xpEarned;
+    // Check level up
+    const LEVELS = [100,250,500,800,1200,1800,2500];
+    while (state.level < LEVELS.length-1 && state.xp >= LEVELS[state.level]) {
+      state.xp -= LEVELS[state.level]; state.level++;
+    }
+    localStorage.setItem('craftrightState', JSON.stringify(state));
+  }
+
+  document.getElementById('death-score').textContent = `Score: ${score}  |  Best: ${hiScore}`;
+  document.getElementById('xp-earned-msg').textContent = xpEarned > 0 ? `+${xpEarned} XP added to Craftright!` : 'Keep playing to earn XP!';
+  document.getElementById('hi-score-display2').textContent = score >= hiScore ? '🏆 New High Score!' : '';
+  document.getElementById('deathScreen').classList.remove('hidden');
+}
+
+// ── Controls ──────────────────────────────────────
+function flap() {
+  if (gameState !== 'playing') return;
+  player.vy = FLAP;
+  soundFlap();
+  player.flapping = true;
+  spawnParticles(player.x, player.y+player.h/2, 'rgb(200,220,255)', 4);
+  setTimeout(()=>{ player.flapping=false; }, 100);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code==='Space'||e.code==='ArrowUp') { e.preventDefault(); flap(); }
+  if (e.code==='Escape') { if(gameState==='playing') pauseGame(); else if(gameState==='paused') resumeGame(); }
+});
+canvas.addEventListener('click', flap);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); }, { passive:false });
+
+// ── UI Functions ──────────────────────────────────
+function selectSkin(el, skin) {
+  document.querySelectorAll('.skin-opt').forEach(s => s.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedSkin = skin;
+}
+
+function startGame() {
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('deathScreen').classList.add('hidden');
+  document.getElementById('pauseScreen').classList.add('hidden');
+  gameState = 'playing';
+  initGame();
+  if(animId) cancelAnimationFrame(animId);
+  lastPipe = 0;
+  gameLoop();
+}
+
+function pauseGame() {
+  gameState = 'paused';
+  document.getElementById('pauseScreen').classList.remove('hidden');
+}
+
+function resumeGame() {
+  gameState = 'playing';
+  document.getElementById('pauseScreen').classList.add('hidden');
+  gameLoop();
+}
+
+function quitToMenu() {
+  gameState = 'menu';
+  if(animId) cancelAnimationFrame(animId);
+  document.getElementById('deathScreen').classList.add('hidden');
+  document.getElementById('pauseScreen').classList.add('hidden');
+  document.getElementById('startScreen').classList.remove('hidden');
+  document.getElementById('hi-score-display').textContent = `Best: ${hiScore}`;
+}
+
+function goHome() {
+  window.location.href = 'Home.html';
+}
+
+// ── Init ──────────────────────────────────────────
+document.getElementById('hi-score-display').textContent = `Best: ${hiScore}`;
+</script>
+</body>
+</html>

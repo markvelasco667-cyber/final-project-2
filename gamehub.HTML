@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Craftright — Game Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent:#3b3a36; --panel:#e7dfc6; --green:#4caf50;
+    --shadow:4px 4px 0 rgba(0,0,0,0.25); --font:'Press Start 2P',monospace;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body{
+    min-height:100%; font-family:var(--font);
+    background:linear-gradient(180deg,#1a0a2a 0%,#0d1a0d 60%);
+    color:var(--accent); overflow-x:hidden;
+  }
+
+  /* Canvas background */
+  #bg-canvas{ position:fixed;inset:0;z-index:0;pointer-events:none;image-rendering:pixelated; }
+
+  .hub-wrap{ position:relative;z-index:2;max-width:900px;margin:0 auto;padding:20px 16px; }
+
+  /* Header */
+  .hub-header{
+    text-align:center;margin-bottom:24px;
+    background:rgba(231,223,198,0.88);
+    backdrop-filter:blur(4px);
+    border:4px solid var(--accent);border-radius:10px;
+    padding:18px;box-shadow:var(--shadow);
+  }
+  .hub-header h1{ font-size:14px;margin-bottom:6px; }
+  .hub-header p{ font-size:8px;color:#666;margin-bottom:10px; }
+  .xp-banner{
+    display:inline-block;background:#fff9c4;
+    border:3px solid var(--accent);border-radius:6px;
+    padding:5px 14px;font-size:8px;color:#7b3f00;
+  }
+  .back-btn{
+    display:inline-block;margin-top:10px;padding:8px 14px;
+    border:3px solid var(--accent);border-radius:6px;
+    background:linear-gradient(180deg,#ffcccb,#ef9a9a);
+    cursor:pointer;font-size:8px;font-family:var(--font);
+    box-shadow:var(--shadow);
+  }
+  .back-btn:active{ transform:translate(2px,2px);box-shadow:none; }
+
+  /* Category sections */
+  .category{ margin-bottom:28px; }
+  .category-title{
+    font-size:9px;margin-bottom:12px;
+    display:flex;align-items:center;gap:8px;
+    background:rgba(231,223,198,0.7);
+    border-left:5px solid var(--accent);
+    padding:8px 12px;border-radius:0 6px 6px 0;
+  }
+
+  /* Game cards grid */
+  .games-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+    gap:14px;
+  }
+  @media(max-width:500px){ .games-grid{ grid-template-columns:repeat(2,1fr); gap:10px; } }
+
+  .game-card{
+    background:rgba(231,223,198,0.88);
+    backdrop-filter:blur(3px);
+    border:4px solid var(--accent);border-radius:10px;
+    padding:16px 12px;text-align:center;
+    cursor:pointer;box-shadow:var(--shadow);
+    transition:transform .12s, box-shadow .12s;
+    position:relative;overflow:hidden;
+  }
+  .game-card:hover{ transform:translateY(-3px);box-shadow:4px 7px 0 rgba(0,0,0,0.25); }
+  .game-card:active{ transform:translate(2px,2px);box-shadow:none; }
+  .game-card .icon{ font-size:30px;margin-bottom:8px;display:block; }
+  .game-card .title{ font-size:8px;margin-bottom:5px;line-height:1.4; }
+  .game-card .desc{ font-size:6px;color:#666;line-height:1.6; }
+  .game-card .xp-badge{
+    position:absolute;top:6px;right:6px;
+    background:#fff9c4;border:2px solid var(--accent);
+    border-radius:4px;padding:2px 5px;font-size:6px;color:#7b3f00;
+  }
+  .game-card .diff{
+    margin-top:8px;display:inline-block;
+    padding:3px 8px;border-radius:4px;font-size:6px;
+    border:2px solid var(--accent);
+  }
+  .diff.easy{ background:#c8e6c9; }
+  .diff.medium{ background:#fff9c4; }
+  .diff.hard{ background:#ffcccb; }
+
+  /* Coming soon badge */
+  .coming-soon{
+    position:absolute;inset:0;background:rgba(0,0,0,0.55);
+    display:flex;align-items:center;justify-content:center;
+    border-radius:7px;
+  }
+  .coming-soon span{
+    background:#333;color:#fff;padding:6px 10px;
+    border-radius:6px;font-size:7px;border:2px solid #666;
+  }
+
+  /* Modal overlay for games */
+  #game-modal{
+    position:fixed;inset:0;z-index:100;
+    background:rgba(0,0,0,0.85);
+    display:none;align-items:center;justify-content:center;
+    padding:12px;
+  }
+  #game-modal.open{ display:flex; }
+  .modal-inner{
+    background:rgba(231,223,198,0.97);
+    border:5px solid var(--accent);border-radius:12px;
+    box-shadow:var(--shadow);
+    width:100%;max-width:620px;max-height:90vh;
+    overflow-y:auto;padding:20px;
+    position:relative;
+  }
+  .modal-close{
+    position:absolute;top:10px;right:10px;
+    background:#ffcccb;border:3px solid var(--accent);
+    border-radius:6px;padding:6px 10px;cursor:pointer;font-size:9px;
+    font-family:var(--font);
+  }
+  .modal-close:active{ transform:translate(1px,1px); }
+  .modal-title{ font-size:11px;margin-bottom:4px;text-align:center; }
+  .modal-sub{ font-size:7px;color:#666;text-align:center;margin-bottom:16px; }
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div class="hub-wrap">
+
+  <!-- Header -->
+  <div class="hub-header">
+    <h1>🎮 Game Hub</h1>
+    <p>Play games, earn XP, have fun!</p>
+    <div class="xp-banner">⭐ All games reward real Craftright XP!</div>
+    <br>
+    <div class="back-btn" onclick="window.location.href='Home.html'">🏠 Back to Home</div>
+  </div>
+
+  <!-- 🧠 Brain Games -->
+  <div class="category">
+    <div class="category-title">🧠 Brain Games</div>
+    <div class="games-grid">
+
+      <div class="game-card" onclick="openGame('trivia')">
+        <div class="xp-badge">+5-15 XP</div>
+        <span class="icon">❓</span>
+        <div class="title">Minecraft Trivia</div>
+        <div class="desc">Test your Minecraft knowledge! Mobs, biomes, crafting & lore</div>
+        <div class="diff easy">Easy → Hard</div>
+      </div>
+
+      <div class="game-card" onclick="openGame('memory')">
+        <div class="xp-badge">+10 XP</div>
+        <span class="icon">🃏</span>
+        <div class="title">Memory Match</div>
+        <div class="desc">Flip and match Minecraft mob cards. Train your memory!</div>
+        <div class="diff medium">Medium</div>
+      </div>
+
+      <div class="game-card" onclick="openGame('recipe')">
+        <div class="xp-badge">+8 XP</div>
+        <span class="icon">🔨</span>
+        <div class="title">Craft the Recipe</div>
+        <div class="desc">Guess what item the crafting grid makes!</div>
+        <div class="diff medium">Medium</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 🎯 Guessing Games -->
+  <div class="category">
+    <div class="category-title">🎯 Guessing Games</div>
+    <div class="games-grid">
+
+      <div class="game-card" onclick="openGame('mobguess')">
+        <div class="xp-badge">+6 XP</div>
+        <span class="icon">👥</span>
+        <div class="title">Who Am I?</div>
+        <div class="desc">Read clues and guess the Minecraft mob or item!</div>
+        <div class="diff easy">Easy</div>
+      </div>
+
+      <div class="game-card" onclick="openGame('biomeguess')">
+        <div class="xp-badge">+8 XP</div>
+        <span class="icon">🌍</span>
+        <div class="title">Biome Guesser</div>
+        <div class="desc">Guess the biome from its description and features!</div>
+        <div class="diff medium">Medium</div>
+      </div>
+
+      <div class="game-card" onclick="openGame('mathblast')">
+        <div class="xp-badge">+10 XP</div>
+        <span class="icon">💣</span>
+        <div class="title">TNT Math Blast</div>
+        <div class="desc">Solve math problems before the TNT explodes!</div>
+        <div class="diff hard">Hard</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 🎲 Quick Games -->
+  <div class="category">
+    <div class="category-title">🎲 Quick Games</div>
+    <div class="games-grid">
+
+      <div class="game-card" onclick="openGame('rps')">
+        <div class="xp-badge">+3 XP</div>
+        <span class="icon">✊</span>
+        <div class="title">Rock Paper Shears</div>
+        <div class="desc">Classic RPS but Minecraft style — Sword, Shield, Arrow!</div>
+        <div class="diff easy">Easy</div>
+      </div>
+
+      <div class="game-card" onclick="openGame('wordscramble')">
+        <div class="xp-badge">+8 XP</div>
+        <span class="icon">🔤</span>
+        <div class="title">Word Scramble</div>
+        <div class="desc">Unscramble the jumbled Minecraft words!</div>
+        <div class="diff medium">Medium</div>
+      </div>
+
+      <div class="game-card" onclick="openGame('higherlow')">
+        <div class="xp-badge">+5 XP</div>
+        <span class="icon">📊</span>
+        <div class="title">Higher or Lower</div>
+        <div class="desc">Guess if the next Minecraft fact number is higher or lower!</div>
+        <div class="diff easy">Easy</div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- .hub-wrap -->
+
+<!-- Game Modal -->
+<div id="game-modal">
+  <div class="modal-inner" id="modal-content">
+    <div class="modal-close" onclick="closeGame()">✖ Close</div>
+    <div id="game-area"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// BACKGROUND CANVAS (floating particles)
+// ═══════════════════════════════════════════
+const bgC = document.getElementById('bg-canvas');
+const bgCtx = bgC.getContext('2d');
+bgC.width = window.innerWidth; bgC.height = window.innerHeight;
+window.addEventListener('resize', () => { bgC.width=window.innerWidth; bgC.height=window.innerHeight; });
+
+const particles = Array.from({length:40},(_,i)=>({
+  x:Math.random()*window.innerWidth, y:Math.random()*window.innerHeight,
+  size:2+Math.random()*3, speed:0.2+Math.random()*0.4,
+  color:['#CCFF44','#FFD700','#88FF88','#FF88CC','#88CCFF'][i%5],
+  phase:Math.random()*Math.PI*2
+}));
+
+(function bgLoop(t=0) {
+  bgC.width=window.innerWidth; bgC.height=window.innerHeight;
+  bgCtx.clearRect(0,0,bgC.width,bgC.height);
+  particles.forEach(p => {
+    p.y -= p.speed;
+    p.x += Math.sin(t*0.001+p.phase)*0.4;
+    if(p.y < -10) { p.y=bgC.height+10; p.x=Math.random()*bgC.width; }
+    const alpha=0.4+Math.sin(t*0.002+p.phase)*0.3;
+    bgCtx.fillStyle=p.color; bgCtx.globalAlpha=alpha;
+    bgCtx.fillRect(~~p.x,~~p.y,p.size,p.size);
+    bgCtx.globalAlpha=1;
+  });
+  requestAnimationFrame(bgLoop);
+})(0);
+
+// ═══════════════════════════════════════════
+// XP SYSTEM
+// ═══════════════════════════════════════════
+function awardXP(amount) {
+  try {
+    const state = JSON.parse(localStorage.getItem('craftrightState')||'{}');
+    state.xp = (state.xp||0) + amount;
+    state.totalXpEarned = (state.totalXpEarned||0) + amount;
+    const LEVELS = [100,250,500,800,1200,1800,2500];
+    while((state.level||0) < LEVELS.length-1 && state.xp >= LEVELS[state.level||0]) {
+      state.xp -= LEVELS[state.level||0]; state.level = (state.level||0)+1;
+    }
+    localStorage.setItem('craftrightState', JSON.stringify(state));
+    return true;
+  } catch(e) { return false; }
+}
+
+function xpToast(amount, container) {
+  const el = document.createElement('div');
+  el.style.cssText='text-align:center;padding:10px;margin-top:12px;background:#c8e6c9;border:3px solid #2e7d32;border-radius:6px;font-size:9px;color:#1b5e20;animation:none';
+  el.innerHTML = `⭐ +${amount} XP added to Craftright!`;
+  container.appendChild(el);
+}
+
+// ═══════════════════════════════════════════
+// MODAL SYSTEM
+// ═══════════════════════════════════════════
+function openGame(id) {
+  document.getElementById('game-modal').classList.add('open');
+  const area = document.getElementById('game-area');
+  area.innerHTML = '';
+  GAMES[id](area);
+}
+function closeGame() {
+  document.getElementById('game-modal').classList.remove('open');
+  document.getElementById('game-area').innerHTML = '';
+}
+
+// ═══════════════════════════════════════════
+// GAME DEFINITIONS
+// ═══════════════════════════════════════════
+const GAMES = {};
+
+// ─── 1. MINECRAFT TRIVIA ───────────────────
+GAMES.trivia = function(area) {
+  const questions = [
+    { q:"What material is needed to make a Nether Portal?", a:"Obsidian", opts:["Obsidian","Bedrock","Netherrack","Crying Obsidian"] },
+    { q:"How many hearts does a Wither have?", a:"300", opts:["150","300","200","450"] },
+    { q:"What do you feed a wolf to tame it?", a:"Bone", opts:["Meat","Bone","Fish","Bread"] },
+    { q:"Which biome does a polar bear spawn in?", a:"Snowy Tundra", opts:["Taiga","Forest","Snowy Tundra","Mountains"] },
+    { q:"What is the rarest ore in Minecraft?", a:"Ancient Debris", opts:["Diamond","Emerald","Ancient Debris","Netherite"] },
+    { q:"How many blocks tall is a Creeper?", a:"1.7 blocks", opts:["1 block","1.7 blocks","2 blocks","1.5 blocks"] },
+    { q:"What happens when lightning strikes a pig?", a:"It becomes a Zombified Piglin", opts:["It dies","It becomes a Zombified Piglin","It becomes a Zombie Pig","Nothing"] },
+    { q:"What is the Ender Dragon's health?", a:"200", opts:["100","200","150","300"] },
+    { q:"Which mob drops a music disc?", a:"Creeper killed by Skeleton", opts:["Zombie","Creeper killed by Skeleton","Witch","Spider"] },
+    { q:"What item do you need to see in the dark?", a:"Night Vision Potion", opts:["Torch","Night Vision Potion","Lantern","Glowstone"] },
+    { q:"What is the max enchantment level for Sharpness?", a:"V", opts:["III","IV","V","VI"] },
+    { q:"How do you make a beacon activate?", a:"Place it on a pyramid of mineral blocks", opts:["Right click it","Place it on a pyramid of mineral blocks","Feed it XP","Light it with flint"] },
+    { q:"What mob is scared of cats?", a:"Creeper", opts:["Zombie","Skeleton","Creeper","Spider"] },
+    { q:"What dimension is the stronghold in?", a:"Overworld", opts:["Nether","The End","Overworld","Deep Dark"] },
+    { q:"What do Endermen hate?", a:"Water", opts:["Fire","Water","Lava","Sunlight"] },
+  ];
+
+  let current=0, score2=0, answered=false;
+  const shuffled = questions.sort(()=>Math.random()-0.5).slice(0,8);
+
+  function render() {
+    if(current >= shuffled.length) {
+      const xp = Math.floor(score2 * 2.5);
+      awardXP(xp);
+      area.innerHTML = `
+        <div class="modal-title">📋 Trivia Results</div>
+        <div style="text-align:center;padding:20px">
+          <div style="font-size:24px;margin-bottom:10px">${score2>=6?'🏆':score2>=4?'⭐':'📖'}</div>
+          <div style="font-size:10px;margin-bottom:8px">${score2} / ${shuffled.length} correct!</div>
+          <div style="font-size:8px;color:#666;margin-bottom:14px">${score2>=6?'Amazing! You know Minecraft!':score2>=4?'Not bad! Keep learning!':'Study more Minecraft!'}</div>
+          <div style="background:#c8e6c9;border:3px solid #2e7d32;border-radius:6px;padding:10px;font-size:9px;color:#1b5e20;margin-bottom:14px">⭐ +${xp} XP added to Craftright!</div>
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+            <button onclick="GAMES.trivia(document.getElementById('game-area'))" style="padding:10px 16px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">🔄 Play Again</button>
+            <button onclick="closeGame()" style="padding:10px 16px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#ffcccb,#ef9a9a);font-family:var(--font);font-size:8px;cursor:pointer">✖ Close</button>
+          </div>
+        </div>`;
+      return;
+    }
+    const q = shuffled[current];
+    const opts = [...q.opts].sort(()=>Math.random()-0.5);
+    area.innerHTML = `
+      <div class="modal-title">❓ Minecraft Trivia</div>
+      <div class="modal-sub">Question ${current+1} of ${shuffled.length} • Score: ${score2}</div>
+      <div style="background:#f6f2d8;border:3px solid #3b3a36;border-radius:8px;padding:14px;margin-bottom:14px;font-size:9px;line-height:1.8;text-align:center">${q.q}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="opts-grid">
+        ${opts.map(o=>`
+          <button onclick="checkAnswer(this,'${o.replace(/'/g,"\\'")}','${q.a.replace(/'/g,"\\'")}',${current})"
+            style="padding:10px 8px;border:3px solid #3b3a36;border-radius:6px;background:#f6f2d8;font-family:var(--font);font-size:7px;cursor:pointer;line-height:1.6">
+            ${o}
+          </button>`).join('')}
+      </div>
+      <div style="margin-top:10px;font-size:7px;color:#999;text-align:center">Progress: ${'⬜'.repeat(shuffled.length-current)}${'✅'.repeat(current)}</div>`;
+    answered = false;
+  }
+
+  window.checkAnswer = function(btn, chosen, correct, idx) {
+    if(answered) return; answered=true;
+    const btns = document.querySelectorAll('#opts-grid button');
+    btns.forEach(b => {
+      b.style.pointerEvents='none';
+      if(b.textContent.trim()===correct) b.style.background='linear-gradient(180deg,#a5d6a7,#66bb6a)';
+    });
+    if(chosen===correct) {
+      btn.style.background='linear-gradient(180deg,#a5d6a7,#66bb6a)';
+      score2++;
+    } else {
+      btn.style.background='linear-gradient(180deg,#ffcccb,#ef9a9a)';
+    }
+    setTimeout(()=>{ current++; render(); }, 900);
+  };
+  render();
+};
+
+// ─── 2. MEMORY MATCH ───────────────────────
+GAMES.memory = function(area) {
+  const items = ['🐔','🐺','🐸','🦊','🐷','🐰','🧟','💀','🕷️','🦇','🐄','🐑'];
+  const cards = [...items,...items].sort(()=>Math.random()-0.5).map((e,i)=>({id:i,emoji:e,flipped:false,matched:false}));
+  let first=null, second=null, moves=0, matches=0, lock=false;
+
+  function render() {
+    area.innerHTML=`
+      <div class="modal-title">🃏 Memory Match</div>
+      <div class="modal-sub">Moves: ${moves} • Matches: ${matches}/${items.length}</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:12px" id="card-grid">
+        ${cards.map((c,i)=>`
+          <div onclick="flipCard(${i})" style="
+            height:48px;border:3px solid #3b3a36;border-radius:6px;
+            display:flex;align-items:center;justify-content:center;
+            font-size:${c.flipped||c.matched?'20px':'14px'};
+            background:${c.matched?'#c8e6c9':c.flipped?'#fff9c4':'#5a9e28'};
+            cursor:pointer;transition:all 0.15s;
+            ${c.matched?'pointer-events:none':''}
+          ">${c.flipped||c.matched?c.emoji:'⬜'}</div>`).join('')}
+      </div>`;
+  }
+
+  window.flipCard = function(i) {
+    if(lock||cards[i].flipped||cards[i].matched) return;
+    cards[i].flipped=true;
+    if(!first) { first=i; render(); return; }
+    second=i; moves++; lock=true; render();
+    if(cards[first].emoji===cards[second].emoji) {
+      cards[first].matched=cards[second].matched=true;
+      first=second=null; lock=false; matches++;
+      if(matches===items.length) {
+        setTimeout(()=>{
+          const xp=10; awardXP(xp);
+          area.innerHTML=`
+            <div class="modal-title">🃏 You Won!</div>
+            <div style="text-align:center;padding:20px">
+              <div style="font-size:30px;margin-bottom:10px">🏆</div>
+              <div style="font-size:9px;margin-bottom:8px">Completed in ${moves} moves!</div>
+              <div style="background:#c8e6c9;border:3px solid #2e7d32;border-radius:6px;padding:10px;font-size:9px;color:#1b5e20;margin-bottom:14px">⭐ +${xp} XP added to Craftright!</div>
+              <button onclick="GAMES.memory(document.getElementById('game-area'))" style="padding:10px 16px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">🔄 Play Again</button>
+            </div>`;
+        }, 500);
+      }
+      render();
+    } else {
+      setTimeout(()=>{
+        cards[first].flipped=cards[second].flipped=false;
+        first=second=null; lock=false; render();
+      }, 900);
+    }
+  };
+  render();
+};
+
+// ─── 3. CRAFT THE RECIPE ───────────────────
+GAMES.recipe = function(area) {
+  const recipes = [
+    { item:'⚔️ Sword', grid:['S','S','_','S','_','_','W','_','_'], hint:'2 material + 1 stick', answer:'Sword', opts:['Sword','Axe','Shovel','Pickaxe'], legend:{S:'Stone/Iron',W:'Stick',_:'Empty'} },
+    { item:'⛏️ Pickaxe', grid:['S','S','S','_','W','_','_','W','_'], hint:'3 material top, 2 sticks', answer:'Pickaxe', opts:['Pickaxe','Axe','Shovel','Hoe'], legend:{S:'Stone',W:'Stick',_:'Empty'} },
+    { item:'🪣 Bucket', grid:['I','_','I','_','I','_','_','_','_'], hint:'3 iron in V shape', answer:'Bucket', opts:['Bucket','Bowl','Cauldron','Helmet'], legend:{I:'Iron',_:'Empty'} },
+    { item:'🏹 Bow', grid:['_','S','W','S','_','W','_','S','W'], hint:'3 sticks + 3 string', answer:'Bow', opts:['Bow','Fishing Rod','Crossbow','Arrow'], legend:{S:'Stick',W:'String',_:'Empty'} },
+    { item:'🪟 Glass Pane', grid:['G','G','G','G','G','G','_','_','_'], hint:'6 glass blocks in 2 rows', answer:'Glass Pane', opts:['Glass Pane','Window','Mirror','Glass Block'], legend:{G:'Glass',_:'Empty'} },
+    { item:'🎆 TNT', grid:['G','S','G','S','G','S','G','S','G'], hint:'Gunpowder + Sand alternating', answer:'TNT', opts:['TNT','Bomb','Firework','Dispenser'], legend:{G:'Gunpowder',S:'Sand',_:'Empty'} },
+    { item:'🛡️ Shield', grid:['W','I','W','W','W','W','_','W','_'], hint:'Iron in center top, wood around', answer:'Shield', opts:['Shield','Armor','Chestplate','Totem'], legend:{W:'Wood',I:'Iron',_:'Empty'} },
+    { item:'🎣 Fishing Rod', grid:['_','_','S','_','S','W','S','_','W'], hint:'3 sticks diagonal + 2 string', answer:'Fishing Rod', opts:['Fishing Rod','Bow','Lead','Tripwire'], legend:{S:'Stick',W:'String',_:'Empty'} },
+  ];
+
+  let idx=0, score3=0;
+  const shuffled=[...recipes].sort(()=>Math.random()-0.5).slice(0,6);
+
+  function render() {
+    if(idx>=shuffled.length) {
+      const xp=Math.floor(score3*1.5);
+      awardXP(xp);
+      area.innerHTML=`
+        <div class="modal-title">🔨 Results</div>
+        <div style="text-align:center;padding:20px">
+          <div style="font-size:10px;margin-bottom:8px">${score3}/${shuffled.length} correct!</div>
+          <div style="background:#c8e6c9;border:3px solid #2e7d32;border-radius:6px;padding:10px;font-size:9px;color:#1b5e20;margin-bottom:14px">⭐ +${xp} XP added to Craftright!</div>
+          <button onclick="GAMES.recipe(document.getElementById('game-area'))" style="padding:10px 16px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">🔄 Play Again</button>
+        </div>`;
+      return;
+    }
+    const r=shuffled[idx];
+    const opts=[...r.opts].sort(()=>Math.random()-0.5);
+    const icons={'S':'🪵','I':'⚙️','W':'🧵','G':'🔷','_':'⬜'};
+    area.innerHTML=`
+      <div class="modal-title">🔨 What does this craft?</div>
+      <div class="modal-sub">Recipe ${idx+1}/${shuffled.length} • Score: ${score3}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-width:180px;margin:0 auto 12px;background:#8B6914;padding:8px;border-radius:8px;border:3px solid #3b3a36">
+        ${r.grid.map(c=>`<div style="height:44px;background:#c8a84b;border:2px solid #8B6914;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:20px">${icons[c]||'⬜'}</div>`).join('')}
+      </div>
+      <div style="font-size:7px;color:#666;text-align:center;margin-bottom:10px">Hint: ${r.hint}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${opts.map(o=>`
+          <button onclick="checkRecipe(this,'${o}','${r.answer}')"
+            style="padding:10px;border:3px solid #3b3a36;border-radius:6px;background:#f6f2d8;font-family:var(--font);font-size:7px;cursor:pointer">
+            ${o}
+          </button>`).join('')}
+      </div>`;
+  }
+
+  window.checkRecipe=function(btn,chosen,correct) {
+    const btns=document.querySelectorAll('button');
+    btns.forEach(b=>{ b.style.pointerEvents='none'; if(b.textContent.trim()===correct) b.style.background='linear-gradient(180deg,#a5d6a7,#66bb6a)'; });
+    if(chosen===correct) { btn.style.background='linear-gradient(180deg,#a5d6a7,#66bb6a)'; score3++; }
+    else btn.style.background='linear-gradient(180deg,#ffcccb,#ef9a9a)';
+    setTimeout(()=>{ idx++; render(); }, 900);
+  };
+  render();
+};
+
+// ─── 4. WHO AM I ───────────────────────────
+GAMES.mobguess = function(area) {
+  const mobs = [
+    { name:'Creeper', clues:['I explode when near players','I am green','I was created by accident','I hiss before exploding','Cats scare me'] },
+    { name:'Enderman', clues:['I pick up blocks','I teleport','I hate water','My eyes are purple','I come from The End'] },
+    { name:'Ghast', clues:['I fly in the Nether','I shoot fireballs','I make crying sounds','I am white and floaty','I have tentacles'] },
+    { name:'Slime', clues:['I bounce around','I am green and slimy','I split into smaller versions','I spawn in swamps','I make a squish sound'] },
+    { name:'Witch', clues:['I throw potions','I wear a hat','I live in swamps','I drink potions to heal','I cackle when attacking'] },
+    { name:'Blaze', clues:['I float and spin','I shoot fire charges','I live in Nether fortresses','I drop blaze rods','I am made of fire'] },
+    { name:'Warden', clues:['I am blind but hear everything','I live in the Deep Dark','I am the strongest mob','I sculk around','I roar loudly'] },
+    { name:'Axolotl', clues:['I live in water','I can play dead','I attack underwater mobs','I come in pink and blue','I am the cutest mob'] },
+  ];
+
+  let idx=0, score4=0, clueIdx=0;
+  const shuffled=[...mobs].sort(()=>Math.random()-0.5).slice(0,5);
+
+  function render() {
+    if(idx>=shuffled.length) {
+      const xp=score4*2; awardXP(xp);
+      area.innerHTML=`
+        <div class="modal-title">👥 Results</div>
+        <div style="text-align:center;padding:20px">
+          <div style="font-size:10px;margin-bottom:8px">${score4}/${shuffled.length} guessed!</div>
+          <div style="background:#c8e6c9;border:3px solid #2e7d32;border-radius:6px;padding:10px;font-size:9px;color:#1b5e20;margin-bottom:14px">⭐ +${xp} XP added to Craftright!</div>
+          <button onclick="GAMES.mobguess(document.getElementById('game-area'))" style="padding:10px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">🔄 Play Again</button>
+        </div>`;
+      return;
+    }
+    const m=shuffled[idx];
+    const displayedClues=m.clues.slice(0,clueIdx+1);
+    const allMobNames=mobs.map(x=>x.name).sort(()=>Math.random()-0.5).slice(0,6);
+    if(!allMobNames.includes(m.name)) allMobNames[0]=m.name;
+    area.innerHTML=`
+      <div class="modal-title">👥 Who Am I?</div>
+      <div class="modal-sub">Mob ${idx+1}/${shuffled.length} • Clue ${clueIdx+1}/${m.clues.length}</div>
+      <div style="background:#f6f2d8;border:3px solid #3b3a36;border-radius:8px;padding:12px;margin-bottom:12px">
+        ${displayedClues.map((c,i)=>`<div style="font-size:8px;padding:4px 0;border-bottom:${i<displayedClues.length-1?'1px solid #ccc':'none'};line-height:1.7">💬 ${c}</div>`).join('')}
+      </div>
+      ${clueIdx<m.clues.length-1?`<button onclick="addClue()" style="display:block;width:100%;padding:8px;margin-bottom:10px;border:3px solid #3b3a36;border-radius:6px;background:#fff9c4;font-family:var(--font);font-size:7px;cursor:pointer">💡 Next Clue (-1 point potential)</button>`:''}
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+        ${allMobNames.sort(()=>Math.random()-0.5).map(n=>`
+          <button onclick="guessMob(this,'${n}','${m.name}',${5-clueIdx})"
+            style="padding:8px;border:3px solid #3b3a36;border-radius:6px;background:#f6f2d8;font-family:var(--font);font-size:7px;cursor:pointer">
+            ${n}
+          </button>`).join('')}
+      </div>`;
+  }
+
+  window.addClue=function() { if(clueIdx<shuffled[idx].clues.length-1) { clueIdx++; render(); } };
+  window.guessMob=function(btn,chosen,correct,pts) {
+    document.querySelectorAll('button').forEach(b=>b.style.pointerEvents='none');
+    if(chosen===correct) { btn.style.background='linear-gradient(180deg,#a5d6a7,#66bb6a)'; score4+=Math.max(1,pts); }
+    else { btn.style.background='linear-gradient(180deg,#ffcccb,#ef9a9a)'; }
+    setTimeout(()=>{ idx++; clueIdx=0; render(); },900);
+  };
+  render();
+};
+
+// ─── 5. BIOME GUESSER ──────────────────────
+GAMES.biomeguess = function(area) {
+  const biomes=[
+    { name:'Desert', desc:'Hot and dry. Cacti grow here. No rain. Temples are buried in sand. Husks spawn here at night.', opts:['Desert','Savanna','Badlands','Mesa'] },
+    { name:'Jungle', desc:'Dense tall trees. Ocelots and parrots live here. Melons grow wild. Hidden temples with tripwires.', opts:['Jungle','Forest','Swamp','Rainforest'] },
+    { name:'Nether', desc:'Filled with lava. Netherrack everywhere. Ghasts fly overhead. No water exists here.', opts:['Nether','The End','Cave','Volcano'] },
+    { name:'Mushroom Fields', desc:'Giant mushrooms grow here. Mooshrooms roam. No hostile mobs spawn naturally. Very rare.', opts:['Mushroom Fields','Forest','Swamp','Jungle'] },
+    { name:'Snowy Tundra', desc:'Flat and covered in snow. Polar bears spawn here. Villages with igloos. Very cold.', opts:['Snowy Tundra','Taiga','Ice Spikes','Mountains'] },
+    { name:'The End', desc:'Void surrounds everything. Endermen everywhere. The Ender Dragon lives here. Purple fog.', opts:['The End','Nether','Deep Dark','Void'] },
+    { name:'Swamp', desc:'Dark and murky water. Witches live here. Slimes spawn at night. Lily pads float.', opts:['Swamp','Ocean','River','Mangrove'] },
+    { name:'Ocean', desc:'Deep water everywhere. Dolphins swim here. Shipwrecks and ruins underwater. Squid roam.', opts:['Ocean','River','Swamp','Lake'] },
+  ];
+  let idx=0,score5=0;
+  const shuffled=[...biomes].sort(()=>Math.random()-0.5).slice(0,6);
+  function render() {
+    if(idx>=shuffled.length) {
+      const xp=score5*2; awardXP(xp);
+      area.innerHTML=`
+        <div class="modal-title">🌍 Results</div>
+        <div style="text-align:center;padding:20px">
+          <div style="font-size:10px;margin-bottom:8px">${score5}/${shuffled.length} correct!</div>
+          <div style="background:#c8e6c9;border:3px solid #2e7d32;border-radius:6px;padding:10px;font-size:9px;color:#1b5e20;margin-bottom:14px">⭐ +${xp} XP added to Craftright!</div>
+          <button onclick="GAMES.biomeguess(document.getElementById('game-area'))" style="padding:10px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">🔄 Play Again</button>
+        </div>`;
+      return;
+    }
+    const b=shuffled[idx];
+    const opts=[...b.opts].sort(()=>Math.random()-0.5);
+    area.innerHTML=`
+      <div class="modal-title">🌍 Biome Guesser</div>
+      <div class="modal-sub">Biome ${idx+1}/${shuffled.length}</div>
+      <div style="background:#f6f2d8;border:3px solid #3b3a36;border-radius:8px;padding:14px;margin-bottom:12px;font-size:8px;line-height:2;text-align:center">${b.desc}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${opts.map(o=>`<button onclick="guessBiome(this,'${o}','${b.name}')" style="padding:10px;border:3px solid #3b3a36;border-radius:6px;background:#f6f2d8;font-family:var(--font);font-size:7px;cursor:pointer">${o}</button>`).join('')}
+      </div>`;
+  }
+  window.guessBiome=function(btn,chosen,correct) {
+    document.querySelectorAll('button').forEach(b=>{ b.style.pointerEvents='none'; if(b.textContent.trim()===correct) b.style.background='linear-gradient(180deg,#a5d6a7,#66bb6a)'; });
+    if(chosen===correct) { btn.style.background='linear-gradient(180deg,#a5d6a7,#66bb6a)'; score5++; }
+    else btn.style.background='linear-gradient(180deg,#ffcccb,#ef9a9a)';
+    setTimeout(()=>{ idx++; render(); },900);
+  };
+  render();
+};
+
+// ─── 6. TNT MATH BLAST ─────────────────────
+GAMES.mathblast = function(area) {
+  let score6=0, timer=0, timerInterval=null, round=0, maxRounds=8;
+  function genQ(r) {
+    const diff=Math.floor(r/3);
+    if(diff===0) { const a=Math.floor(Math.random()*10)+1,b=Math.floor(Math.random()*10)+1; return {q:`${a} + ${b}`,a:a+b}; }
+    if(diff===1) { const a=Math.floor(Math.random()*12)+2,b=Math.floor(Math.random()*a)+1; return {q:`${a} × ${b}`,a:a*b}; }
+    const a=Math.floor(Math.random()*15)+5,b=Math.floor(Math.random()*10)+1,c=Math.floor(Math.random()*5)+1;
+    return {q:`(${a} + ${b}) × ${c}`,a:(a+b)*c};
+  }
+  function startRound() {
+    if(round>=maxRounds) { endGame6(); return; }
+    const q=genQ(round); round++;
+    const timeLimit=Math.max(5,12-round);
+    timer=timeLimit;
+    if(timerInterval) clearInterval(timerInterval);
+    const wrong1=q.a+Math.floor(Math.random()*5)+1;
+    const wrong2=q.a-Math.floor(Math.random()*5)-1;
+    const wrong3=q.a+Math.floor(Math.random()*10)+6;
+    const opts=[q.a,wrong1,Math.max(0,wrong2),wrong3].sort(()=>Math.random()-0.5);
+    area.innerHTML=`
+      <div class="modal-title">💣 TNT Math Blast</div>
+      <div class="modal-sub">Round ${round}/${maxRounds} • Score: ${score6}</div>
+      <div style="text-align:center;margin-bottom:12px">
+        <div style="font-size:28px" id="tnt-emoji">💣</div>
+        <div id="tnt-timer" style="font-size:9px;color:#c62828;margin-top:4px">⏱ ${timer}s</div>
+        <div style="width:100%;height:8px;background:#eee;border-radius:4px;border:2px solid #3b3a36;margin-top:6px;overflow:hidden">
+          <div id="timer-bar" style="height:100%;background:#c62828;width:100%;transition:width 1s linear;border-radius:2px"></div>
+        </div>
+      </div>
+      <div style="background:#f6f2d8;border:3px solid #3b3a36;border-radius:8px;padding:14px;font-size:14px;text-align:center;margin-bottom:12px;letter-spacing:2px">${q.q} = ?</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="math-opts">
+        ${opts.map(o=>`<button onclick="checkMath(this,${o},${q.a})" style="padding:12px;border:3px solid #3b3a36;border-radius:6px;background:#f6f2d8;font-family:var(--font);font-size:9px;cursor:pointer">${o}</button>`).join('')}
+      </div>`;
+    timerInterval=setInterval(()=>{
+      timer--;
+      const el=document.getElementById('tnt-timer');
+      const bar=document.getElementById('timer-bar');
+      const emoji=document.getElementById('tnt-emoji');
+      if(el) el.textContent=`⏱ ${timer}s`;
+      if(bar) bar.style.width=`${(timer/timeLimit)*100}%`;
+      if(emoji&&timer<=3) emoji.textContent='🔥💣';
+      if(timer<=0) { clearInterval(timerInterval); checkMath(null,null,q.a); }
+    },1000);
+  }
+  window.checkMath=function(btn,chosen,correct) {
+    clearInterval(timerInterval);
+    document.querySelectorAll('#math-opts button').forEach(b=>{ b.style.pointerEvents='none'; if(parseInt(b.textContent)===correct) b.style.background='linear-gradient(180deg,#a5d6a7,#66bb6a)'; });
+    if(chosen===correct) { if(btn) btn.style.background='linear-gradient(180deg,#a5d6a7,#66bb6a)'; score6+=timer+1; }
+    else if(btn) btn.style.background='linear-gradient(180deg,#ffcccb,#ef9a9a)';
+    setTimeout(()=>startRound(),700);
+  };
+  function endGame6() {
+    const xp=Math.floor(score6/3); awardXP(xp);
+    area.innerHTML=`
+      <div class="modal-title">💣 Boom! Results</div>
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:24px;margin-bottom:8px">💥</div>
+        <div style="font-size:10px;margin-bottom:8px">Score: ${score6} points!</div>
+        <div style="background:#c8e6c9;border:3px solid #2e7d32;border-radius:6px;padding:10px;font-size:9px;color:#1b5e20;margin-bottom:14px">⭐ +${xp} XP added to Craftright!</div>
+        <button onclick="GAMES.mathblast(document.getElementById('game-area'))" style="padding:10px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">🔄 Play Again</button>
+      </div>`;
+  }
+  startRound();
+};
+
+// ─── 7. ROCK PAPER SHEARS ──────────────────
+GAMES.rps = function(area) {
+  const choices=[{n:'⚔️ Sword',beats:'Arrow'},{n:'🛡️ Shield',beats:'Sword'},{n:'🏹 Arrow',beats:'Shield'}];
+  let wins=0,losses=0,ties=0,rounds=0;
+  function render(msg='') {
+    area.innerHTML=`
+      <div class="modal-title">✊ Sword Shield Arrow</div>
+      <div class="modal-sub">W:${wins} L:${losses} T:${ties}</div>
+      ${msg?`<div style="text-align:center;padding:10px;margin-bottom:10px;border-radius:6px;border:3px solid #3b3a36;font-size:9px;background:#f6f2d8">${msg}</div>`:''}
+      <div style="text-align:center;font-size:8px;margin-bottom:12px;color:#666">Choose your weapon!</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        ${choices.map(c=>`
+          <button onclick="playRPS('${c.n}')" style="padding:14px 10px;border:4px solid #3b3a36;border-radius:8px;background:#f6f2d8;font-family:var(--font);font-size:7px;cursor:pointer;min-width:90px;line-height:2">
+            ${c.n}
+          </button>`).join('')}
+      </div>
+      ${rounds>=5?`<div style="text-align:center;margin-top:14px"><button onclick="endRPS()" style="padding:8px 14px;border:3px solid #3b3a36;border-radius:6px;background:#fff9c4;font-family:var(--font);font-size:7px;cursor:pointer">🏁 End Game</button></div>`:''}`;
+  }
+  window.playRPS=function(chosen) {
+    rounds++;
+    const cpu=choices[Math.floor(Math.random()*3)];
+    const me=choices.find(c=>c.n===chosen);
+    let result;
+    if(me.n===cpu.n) { result='🤝 Tie!'; ties++; }
+    else if(me.beats===cpu.n.replace(/⚔️ |🛡️ |🏹 /,'')) { result='✅ You Win!'; wins++; }
+    else { result='❌ CPU Wins!'; losses++; }
+    render(`You: ${me.n} vs CPU: ${cpu.n} — ${result}`);
+  };
+  window.endRPS=function() {
+    const xp=wins; awardXP(xp);
+    area.innerHTML=`
+      <div class="modal-title">✊ Results</div>
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:9px;margin-bottom:8px">W:${wins} L:${losses} T:${ties}</div>
+        <div style="background:#c8e6c9;border:3px solid #2e7d32;border-radius:6px;padding:10px;font-size:9px;color:#1b5e20;margin-bottom:14px">⭐ +${xp} XP added to Craftright!</div>
+        <button onclick="GAMES.rps(document.getElementById('game-area'))" style="padding:10px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">🔄 Play Again</button>
+      </div>`;
+  };
+  render();
+};
+
+// ─── 8. WORD SCRAMBLE ──────────────────────
+GAMES.wordscramble = function(area) {
+  const words=[
+    {w:'CREEPER',hint:'Green exploding mob'},
+    {w:'DIAMOND',hint:'Rare blue gem ore'},
+    {w:'NETHER',hint:'The fire dimension'},
+    {w:'ENDERMAN',hint:'Tall teleporting mob'},
+    {w:'OBSIDIAN',hint:'Needed for portals'},
+    {w:'SKELETON',hint:'Undead archer'},
+    {w:'PICKAXE',hint:'Mining tool'},
+    {w:'ENCHANT',hint:'Add powers to items'},
+    {w:'BLAZE',hint:'Flying fire mob'},
+    {w:'CRAFTING',hint:'What this game is about!'},
+  ];
+  let idx=0,score7=0;
+  const shuffled=[...words].sort(()=>Math.random()-0.5).slice(0,6);
+  function scramble(w){ return w.split('').sort(()=>Math.random()-0.5).join(''); }
+  function render() {
+    if(idx>=shuffled.length) {
+      const xp=score7*2; awardXP(xp);
+      area.innerHTML=`
+        <div class="modal-title">🔤 Results</div>
+        <div style="text-align:center;padding:20px">
+          <div style="font-size:10px;margin-bottom:8px">${score7}/${shuffled.length} correct!</div>
+          <div style="background:#c8e6c9;border:3px solid #2e7d32;border-radius:6px;padding:10px;font-size:9px;color:#1b5e20;margin-bottom:14px">⭐ +${xp} XP added to Craftright!</div>
+          <button onclick="GAMES.wordscramble(document.getElementById('game-area'))" style="padding:10px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">🔄 Play Again</button>
+        </div>`;
+      return;
+    }
+    const entry=shuffled[idx];
+    let sc=scramble(entry.w);
+    while(sc===entry.w) sc=scramble(entry.w);
+    area.innerHTML=`
+      <div class="modal-title">🔤 Word Scramble</div>
+      <div class="modal-sub">Word ${idx+1}/${shuffled.length} • Score: ${score7}</div>
+      <div style="background:#f6f2d8;border:3px solid #3b3a36;border-radius:8px;padding:14px;text-align:center;margin-bottom:10px">
+        <div style="font-size:16px;letter-spacing:4px;margin-bottom:6px">${sc}</div>
+        <div style="font-size:7px;color:#666">Hint: ${entry.hint}</div>
+      </div>
+      <input id="word-input" placeholder="Type your answer..." maxlength="12"
+        style="width:100%;padding:10px;border:3px solid #3b3a36;border-radius:6px;font-family:var(--font);font-size:9px;margin-bottom:10px;text-transform:uppercase;background:#fff9c4">
+      <button onclick="checkWord('${entry.w}')" style="width:100%;padding:10px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">✔ Submit</button>
+      <div id="word-feedback" style="text-align:center;margin-top:8px;font-size:8px;min-height:20px"></div>`;
+    document.getElementById('word-input').addEventListener('keydown',e=>{ if(e.key==='Enter') checkWord(entry.w); });
+    document.getElementById('word-input').focus();
+  }
+  window.checkWord=function(correct) {
+    const val=document.getElementById('word-input').value.toUpperCase().trim();
+    const fb=document.getElementById('word-feedback');
+    if(val===correct) { fb.style.color='#2e7d32'; fb.textContent='✅ Correct!'; score7++; setTimeout(()=>{idx++;render();},700); }
+    else { fb.style.color='#c62828'; fb.textContent=`❌ Not quite! (${correct.length} letters)`; }
+  };
+  render();
+};
+
+// ─── 9. HIGHER OR LOWER ────────────────────
+GAMES.higherlow = function(area) {
+  const facts=[
+    {q:'Health points of a Zombie',a:20},
+    {q:'Health points of an Ender Dragon',a:200},
+    {q:'Max stack size of most items',a:64},
+    {q:'Health of a Wither',a:300},
+    {q:'Blocks tall of a Creeper',a:2},
+    {q:'Ticks per Minecraft day',a:24000},
+    {q:'Health of a Ghast',a:10},
+    {q:'Max enchantment level for Fortune',a:3},
+    {q:'Number of biomes in Minecraft',a:67},
+    {q:'Health points of a player',a:20},
+    {q:'Layers of bedrock at bottom',a:5},
+    {q:'Health of Iron Golem',a:100},
+  ];
+  let idx=0,score8=0;
+  const shuffled=[...facts].sort(()=>Math.random()-0.5);
+  function render() {
+    if(idx>=shuffled.length-1) {
+      const xp=score8; awardXP(xp);
+      area.innerHTML=`
+        <div class="modal-title">📊 Results</div>
+        <div style="text-align:center;padding:20px">
+          <div style="font-size:10px;margin-bottom:8px">${score8} correct!</div>
+          <div style="background:#c8e6c9;border:3px solid #2e7d32;border-radius:6px;padding:10px;font-size:9px;color:#1b5e20;margin-bottom:14px">⭐ +${xp} XP added to Craftright!</div>
+          <button onclick="GAMES.higherlow(document.getElementById('game-area'))" style="padding:10px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">🔄 Play Again</button>
+        </div>`;
+      return;
+    }
+    const cur=shuffled[idx], next=shuffled[idx+1];
+    area.innerHTML=`
+      <div class="modal-title">📊 Higher or Lower?</div>
+      <div class="modal-sub">Round ${idx+1} • Score: ${score8}</div>
+      <div style="background:#f6f2d8;border:3px solid #3b3a36;border-radius:8px;padding:14px;margin-bottom:10px;text-align:center">
+        <div style="font-size:8px;margin-bottom:4px">${cur.q}</div>
+        <div style="font-size:18px;margin-top:6px;color:#7b3f00">${cur.a}</div>
+      </div>
+      <div style="font-size:8px;text-align:center;margin-bottom:12px;color:#3b3a36">Is <b>${next.q}</b> higher or lower?</div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button onclick="guessHL('higher',${next.a},${cur.a})" style="padding:12px 20px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#a5d6a7,#66bb6a);font-family:var(--font);font-size:8px;cursor:pointer">⬆ Higher</button>
+        <button onclick="guessHL('lower',${next.a},${cur.a})" style="padding:12px 20px;border:4px solid #3b3a36;border-radius:6px;background:linear-gradient(180deg,#ef9a9a,#ffcccb);font-family:var(--font);font-size:8px;cursor:pointer">⬇ Lower</button>
+      </div>`;
+  }
+  window.guessHL=function(guess,nextVal,curVal) {
+    const correct=(guess==='higher'&&nextVal>curVal)||(guess==='lower'&&nextVal<curVal)||(nextVal===curVal);
+    if(correct) score8++;
+    const msg=correct?`✅ Correct! It was ${nextVal}`:`❌ Wrong! It was ${nextVal}`;
+    const fb=document.createElement('div');
+    fb.style.cssText=`text-align:center;padding:8px;margin-top:10px;border-radius:6px;font-size:8px;border:2px solid #3b3a36;background:${correct?'#c8e6c9':'#ffcccb'}`;
+    fb.textContent=msg;
+    area.appendChild(fb);
+    document.querySelectorAll('button').forEach(b=>b.style.pointerEvents='none');
+    setTimeout(()=>{ idx++; render(); },800);
+  };
+  render();
+};
+</script>
+</body>
+</html>

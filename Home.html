@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+  <title>Craftright</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    /* ══════════════════════════════════════════
+       VARIABLES & RESET
+    ══════════════════════════════════════════ */
+    :root{
+      --bg1:#7ec850; --bg2:#6fb0d8;
+      --accent:#3b3a36; --panel:#e7dfc6;
+      --muted:#9aa7a3; --green:#4caf50;
+      --shadow:4px 4px 0 rgba(0,0,0,.22);
+      --font:'Press Start 2P',monospace;
+    }
+    *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
+    html,body{
+      margin:0; min-height:100%;
+      font-family:var(--font);
+      background:linear-gradient(180deg,var(--bg2) 0%,var(--bg1) 60%);
+      color:var(--accent); overflow-x:hidden;
+    }
+
+    /* ══════════════════════════════════════════
+       Z LAYERS
+    ══════════════════════════════════════════ */
+    #biome-canvas{ position:fixed;inset:0;z-index:0;pointer-events:none; image-rendering:pixelated; }
+    #biome-fx    { position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden; }
+    .wrap        { position:relative;z-index:2; }
+    #achievement { position:fixed;z-index:9999; }
+    #avatar-modal{ position:fixed;z-index:9998; }
+
+    /* ══════════════════════════════════════════
+       LAYOUT — desktop 2-col / mobile 1-col
+    ══════════════════════════════════════════ */
+    .wrap{
+      max-width:880px; margin:0 auto;
+      padding:12px;
+      display:grid;
+      grid-template-columns:250px 1fr;
+      grid-template-rows:auto;
+      gap:12px;
+      align-items:start;
+    }
+    @media(max-width:860px){
+      .wrap{ grid-template-columns:1fr; padding:8px; gap:8px; max-width:480px; }
+    }
+    @media(max-width:400px){
+      .wrap{ padding:6px; gap:6px; }
+    }
+
+    /* ══════════════════════════════════════════
+       PANEL — semi-transparent so bg shows
+    ══════════════════════════════════════════ */
+    .panel{
+      background:rgba(231,223,198,0.82);
+      backdrop-filter:blur(3px);
+      -webkit-backdrop-filter:blur(3px);
+      border:4px solid var(--accent);
+      border-radius:8px;
+      box-shadow:var(--shadow);
+      padding:11px;
+    }
+
+    /* ══════════════════════════════════════════
+       LOGO
+    ══════════════════════════════════════════ */
+    .logo{ display:flex;gap:10px;align-items:center; }
+    .logo-cube{
+      width:44px;height:44px;flex-shrink:0;
+      background:linear-gradient(180deg,#c69c6d,#a87b47);
+      border:4px solid var(--accent);
+      display:flex;align-items:center;justify-content:center;
+      font-size:18px;border-radius:4px;
+    }
+    .logo h1{ font-size:11px;margin:0;line-height:1.3;font-weight:normal; }
+    .logo .sub{ font-size:7px;color:var(--muted);margin-top:3px; }
+
+    /* ══════════════════════════════════════════
+       PROFILE SECTION
+    ══════════════════════════════════════════ */
+    .profile{
+      display:flex;gap:8px;align-items:center;
+      margin-top:10px;padding:8px;
+      background:rgba(0,0,0,.06);border-radius:6px;
+    }
+
+    /* Avatar wrapper — clickable */
+    #avatar-wrap{
+      position:relative;flex-shrink:0;
+      width:68px;height:68px;cursor:pointer;
+    }
+    #avatar-img{
+      width:68px;height:68px;
+      border:4px solid var(--accent);
+      border-radius:6px;object-fit:cover;
+      background:#c8e6c9;
+      display:block;
+    }
+    /* camera badge */
+    #avatar-wrap::after{
+      content:"📷";
+      position:absolute;bottom:-6px;right:-6px;
+      font-size:14px;
+      background:#fff;border:2px solid var(--accent);
+      border-radius:50%;width:22px;height:22px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:11px;line-height:22px;text-align:center;
+    }
+    #avatar-file{ display:none; }
+
+    /* XP section */
+    .lvlbox{ flex:1;min-width:0; }
+    .muted{ font-size:9px;color:var(--muted); }
+    .lvlname{ font-size:12px;margin:3px 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .xpbar{
+      height:16px;background:#fff;
+      border:3px solid var(--accent);margin-top:6px;position:relative;
+      border-radius:3px;overflow:hidden;
+    }
+    .xpfill{
+      height:100%;width:0%;
+      background:linear-gradient(90deg,var(--green),#8bc34a);
+      transition:width .4s ease;
+    }
+    .xptext{ position:absolute;left:6px;top:1px;font-size:8px;line-height:1; }
+
+    /* Pet display in profile */
+    #pet-slot{
+      position:relative;flex-shrink:0;
+      width:72px;height:72px;
+      border:3px solid var(--accent);
+      border-radius:4px;background:rgba(0,0,0,.1);
+      overflow:visible;display:flex;align-items:center;justify-content:center;
+    }
+    #pet-display{
+      width:64px;height:64px;
+      image-rendering:pixelated;image-rendering:crisp-edges;
+      animation:pet-hop 1.4s infinite ease-in-out;
+      transform-origin:bottom;
+    }
+    @keyframes pet-hop{
+      0%,100%{ transform:translateY(0) scale(1.1,.9); }
+      20%    { transform:translateY(0) scale(1.15,.85); }
+      50%    { transform:translateY(-12px) scale(.88,1.15); }
+      80%    { transform:translateY(0) scale(1.05,.95); }
+    }
+    #pet-slot::after{
+      content:'';position:absolute;bottom:4px;
+      width:24px;height:5px;
+      background:rgba(0,0,0,.15);border-radius:50%;
+      animation:shadow-s 1.4s infinite ease-in-out;
+    }
+    @keyframes shadow-s{
+      0%,100%,20%,80%{ transform:scale(1);opacity:1; }
+      50%{ transform:scale(.5);opacity:.3; }
+    }
+
+    /* ══════════════════════════════════════════
+       BUTTONS
+    ══════════════════════════════════════════ */
+    .btn{
+      display:block;width:100%;
+      padding:8px 10px;
+      border:4px solid var(--accent);border-radius:6px;
+      background:linear-gradient(180deg,#f6f2d8,#e7dfc6);
+      cursor:pointer;text-align:center;
+      font-family:var(--font);font-size:8px;
+      box-shadow:var(--shadow);
+      transition:transform .1s,box-shadow .1s;
+      -webkit-user-select:none;user-select:none;
+    }
+    .btn:active{ transform:translate(2px,2px);box-shadow:none; }
+    .btn.red{ background:linear-gradient(180deg,#ffcccb,#ffaaaa); }
+    .btn.green{ background:linear-gradient(180deg,#c8e6c9,#a5d6a7); }
+    .controls{ margin-top:12px;display:flex;flex-direction:column;gap:8px; }
+    .btn-row{ display:flex;gap:8px; }
+    .btn-row .btn{ flex:1; }
+
+    /* ══════════════════════════════════════════
+       UPCOMING QUEUE
+    ══════════════════════════════════════════ */
+    #upcoming-container{
+      margin-top:10px;padding:8px;
+      border:4px solid var(--accent);border-radius:4px;
+      background:#f6f2d8;min-height:50px;
+      display:flex;flex-direction:column;gap:4px;
+      font-size:8px;
+    }
+    .up-header{ font-size:9px;font-weight:bold;margin-bottom:2px; }
+    .session-row{
+      display:flex;justify-content:space-between;align-items:center;
+      background:#e7dfc6;padding:5px 8px;
+      border:2px solid var(--accent);border-radius:4px;
+    }
+
+    /* ══════════════════════════════════════════
+       CLOCK
+    ══════════════════════════════════════════ */
+    .clock-wrap{
+      display:flex;gap:10px;align-items:center;
+      flex-wrap:wrap;
+    }
+    .clock{
+      flex:1;min-width:130px;
+      background:rgba(255,255,255,0.75);
+      backdrop-filter:blur(2px);
+      -webkit-backdrop-filter:blur(2px);
+      border:4px solid var(--accent);border-radius:8px;
+      padding:10px;display:flex;flex-direction:column;align-items:center;
+      box-shadow:var(--shadow);
+    }
+    #ph-clock-wrap{
+      min-width:70px;
+    }
+    @media(max-width:600px){
+      #ph-clock-wrap{ display:none; }
+      #extras-side-btn{ display:none; }
+    }
+    #clock-label{ font-size:9px;margin-bottom:6px; }
+    #clock-time{ font-size:clamp(24px,6vw,40px); }
+    .clock-btns{ display:flex;flex-direction:column;gap:8px;min-width:130px; }
+    @media(max-width:480px){
+      .clock-wrap{ flex-direction:column; }
+      .clock-btns{ flex-direction:row;min-width:0;width:100%; }
+    }
+
+    /* ══════════════════════════════════════════
+       EXPLORER (biomes + pets)
+    ══════════════════════════════════════════ */
+    .explorer h3{ font-size:10px;margin:12px 0 8px; }
+    .tiles{
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(100px,1fr));
+      gap:8px;margin-top:6px;
+    }
+
+    /* Biome tile */
+    .tile{
+      height:78px;
+      border:4px solid var(--accent);border-radius:6px;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      gap:3px;cursor:pointer;
+      transition:transform .1s;
+      -webkit-user-select:none;user-select:none;
+    }
+    .tile:active{ transform:scale(.96); }
+    .tile .name{ font-size:8px;text-align:center;line-height:1.3; }
+    .tile small{ font-size:7px;text-align:center; }
+
+    /* Pet tile */
+    .tile.pet{
+      height:115px;
+    }
+    .tile.pet img{ width:56px;height:56px;image-rendering:pixelated; }
+    .tile.pet .pname{ font-size:8px;text-align:center;margin-top:2px; }
+    .tile.pet small{ font-size:7px;margin-top:1px; }
+    .tile.active-pet{ border-color:var(--green);border-width:5px; }
+
+    /* ══════════════════════════════════════════
+       ACHIEVEMENT BANNER
+    ══════════════════════════════════════════ */
+    #achievement{
+      top:-110px;left:50%;transform:translateX(-50%);
+      background:linear-gradient(180deg,#fff,#eaeaea);
+      border:5px solid var(--accent);border-radius:6px;
+      box-shadow:var(--shadow);
+      padding:10px 18px;font-size:9px;
+      text-align:center;white-space:nowrap;
+      transition:top .45s ease;
+    }
+    #achievement.show{ top:14px; }
+
+    /* ══════════════════════════════════════════
+       AVATAR MODAL
+    ══════════════════════════════════════════ */
+    #avatar-modal{
+      inset:0;
+      background:rgba(0,0,0,.65);
+      display:none;align-items:center;justify-content:center;
+      padding:16px;
+    }
+    #avatar-modal.open{ display:flex; }
+    .modal-box{
+      background:linear-gradient(160deg,var(--panel),#fff);
+      border:5px solid var(--accent);border-radius:8px;
+      box-shadow:var(--shadow);
+      padding:18px;width:100%;max-width:360px;
+    }
+    .modal-box h2{ font-size:10px;margin:0 0 14px;text-align:center; }
+    .modal-grid{
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+      gap:8px;margin-bottom:14px;
+    }
+    .avatar-opt{
+      width:100%;aspect-ratio:1;
+      border:3px solid var(--accent);border-radius:6px;
+      object-fit:cover;cursor:pointer;
+      transition:transform .1s;
+      background:#e0e0e0;
+    }
+    .avatar-opt:active{ transform:scale(.93); }
+    .avatar-opt.selected{ border-color:var(--green);border-width:4px; }
+    .modal-divider{ text-align:center;font-size:8px;color:var(--muted);margin:10px 0; }
+    #upload-label{
+      display:block;width:100%;
+      padding:10px;border:4px dashed var(--accent);border-radius:6px;
+      text-align:center;font-size:8px;cursor:pointer;
+      background:#f6f2d8;font-family:var(--font);
+    }
+    #upload-file{ display:none; }
+    .modal-close{
+      display:block;width:100%;margin-top:10px;
+      padding:10px;border:4px solid var(--accent);border-radius:6px;
+      background:linear-gradient(180deg,#f6f2d8,#e7dfc6);
+      text-align:center;font-size:9px;cursor:pointer;
+      font-family:var(--font);box-shadow:var(--shadow);
+    }
+
+    /* BIOME FX — handled entirely by biomes.js canvas, no CSS overlays needed */
+  
+    /* ══════════════════════════════════════════
+       MOBILE RESPONSIVE TWEAKS
+    ══════════════════════════════════════════ */
+    @media(max-width:480px){
+      .clock-wrap{ flex-direction:column; }
+      .clock-btns{ flex-direction:row;min-width:0;width:100%; }
+      .tiles{ grid-template-columns:repeat(auto-fill,minmax(85px,1fr)); gap:6px; }
+      .tile{ height:68px; }
+      .tile.pet{ height:90px; }
+      .tile .name{ font-size:7px; }
+      .tile small{ font-size:6px; }
+      .panel{ padding:9px; }
+      #clock-time{ font-size:clamp(20px,8vw,34px) !important; }
+      .logo h1{ font-size:9px; }
+      .lvlname{ font-size:10px; }
+    }
+    @media(max-width:360px){
+      .tiles{ grid-template-columns:repeat(3,1fr); gap:5px; }
+      .tile{ height:62px; }
+      .tile.pet{ height:82px; }
+    }
+  
+    /* ══ UI HIDE/SHOW TOGGLE ══ */
+    #ui-toggle-btn {
+      position:fixed;
+      bottom:18px;
+      left:50%;
+      transform:translateX(-50%);
+      z-index:9000;
+      background:rgba(231,223,198,0.92);
+      border:4px solid var(--accent);
+      border-radius:50px;
+      padding:8px 22px;
+      cursor:pointer;
+      font-family:var(--font);
+      font-size:9px;
+      box-shadow:0 4px 16px rgba(0,0,0,0.35);
+      backdrop-filter:blur(4px);
+      display:flex;align-items:center;gap:8px;
+      transition:background .2s, transform .1s;
+      -webkit-user-select:none;user-select:none;
+    }
+    #ui-toggle-btn:active{ transform:translateX(-50%) translateY(2px); }
+    #ui-toggle-btn .arrow{ font-size:13px;transition:transform .35s; }
+    #ui-toggle-btn.hidden-ui .arrow{ transform:rotate(180deg); }
+
+    /* When UI is hidden, wrap slides up */
+    .wrap{
+      transition:transform 0.4s cubic-bezier(.4,0,.2,1), opacity 0.35s;
+    }
+    .wrap.ui-hidden{
+      transform:translateY(-110%);
+      opacity:0;
+      pointer-events:none;
+    }
+
+  </style>
+</head>
+<body>
+
+<!-- canvas bg (biomes.js draws here) -->
+<canvas id="biome-canvas"></canvas>
+
+<!-- CSS overlay FX -->
+<div id="biome-fx"></div>
+
+<!-- Achievement toast -->
+<div id="achievement">
+  <strong>Achievement Get!</strong>
+  <div id="achievement-text"></div>
+</div>
+
+<!-- ══════════ AVATAR PICKER MODAL ══════════ -->
+<div id="avatar-modal">
+  <div class="modal-box">
+    <h2>🧑 Choose Your Avatar</h2>
+
+    <!-- Preset avatars (Minecraft skin style placeholders) -->
+    <div class="modal-grid" id="preset-grid">
+      <!-- filled by JS -->
+    </div>
+
+    <div class="modal-divider">— or upload your own —</div>
+
+    <label id="upload-label" for="upload-file">
+      📁 Tap to upload a photo
+    </label>
+    <input id="upload-file" type="file" accept="image/*">
+
+    <div class="modal-close" id="modal-close-btn">✔ Done</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MAIN LAYOUT
+══════════════════════════════════════════ -->
+<div class="wrap">
+
+  <!-- ╔══════════════╗ -->
+  <!-- ║   SIDEBAR    ║ -->
+  <!-- ╚══════════════╝ -->
+  <aside class="panel">
+
+    <!-- Logo -->
+    <div class="logo">
+      <div class="logo-cube">⛏️</div>
+      <div>
+        <h1>Craftright</h1>
+        <div class="sub">Study • Play • Level Up</div>
+      </div>
+    </div>
+
+    <!-- Profile: avatar + pet + XP -->
+    <div class="profile">
+
+      <!-- Avatar (click to change) -->
+      <div id="avatar-wrap">
+        <img id="avatar-img" src="" alt="Avatar">
+      </div>
+      <input id="avatar-file" type="file" accept="image/*">
+
+      <!-- Pet bouncing -->
+      <div id="pet-slot">
+        <img id="pet-display" src="" alt="Pet">
+      </div>
+
+      <!-- Name + XP -->
+      <div class="lvlbox">
+        <div class="muted">Player: <span id="player-name">Hero</span></div>
+        <div class="lvlname" id="level-name">Steve</div>
+        <div class="xpbar">
+          <div class="xpfill" id="xp-fill"></div>
+          <div class="xptext" id="xp-text">0 XP</div>
+        </div>
+        <div class="muted" id="xp-goal">Next: Alex</div>
+      </div>
+    </div>
+
+    <!-- Control buttons -->
+    <div class="controls">
+      <div class="btn" id="add-study">📖 + Study Session</div>
+      <div class="btn" id="add-game">🎮 + Game Session</div>
+      <div class="btn-row">
+        <div class="btn" id="reset">🔄 Reset</div>
+        <div class="btn" id="sim">⚡ +50 XP</div>
+      </div>
+      <div class="btn" id="music-toggle">🎵 Music: ON</div>
+      <div class="btn red" id="logout">🚪 Logout</div>
+
+      <!-- ── EXTRAS BUTTON ── -->
+      <div style="margin:10px 0 0;border-top:3px solid rgba(59,58,54,0.25);padding-top:10px;">
+        <div class="btn" onclick="openExtras()"
+          style="background:linear-gradient(180deg,#ce93d8,#ab47bc);color:#fff;border-color:#6a1b9a;display:flex;align-items:center;justify-content:center;gap:6px">
+          ✨ Extras
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Session queue -->
+    <div id="upcoming-container">
+      <div class="up-header">📋 Upcoming Sessions</div>
+    </div>
+
+  </aside>
+
+  <!-- ╔═══════╗ -->
+  <!-- ║  MAIN ║ -->
+  <!-- ╚═══════╝ -->
+  <main>
+
+    <!-- Timer + PH Clock + Extras -->
+    <section class="panel" style="margin-bottom:14px">
+
+      <!-- Row: Session timer | Buttons | MC Clock + PH Time | Extras -->
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+
+        <!-- Session timer -->
+        <div class="clock" style="flex:1;min-width:140px">
+          <div id="clock-label" style="font-size:9px;margin-bottom:6px">IDLE</div>
+          <div id="clock-time" style="font-size:clamp(24px,6vw,40px)">00:00</div>
+        </div>
+
+        <!-- Start / Complete buttons -->
+        <div class="clock-btns" style="display:flex;flex-direction:column;gap:8px;min-width:120px">
+          <div class="btn green" id="start">▶ Start</div>
+          <div class="btn" id="complete">✔ Complete</div>
+        </div>
+
+        <!-- Minecraft clock + PH live time -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0">
+          <div style="font-size:6px;color:#9aa7a3;letter-spacing:1px">☀️ MC CLOCK</div>
+          <canvas id="mc-clock" width="72" height="72"
+            style="border:4px solid #3b3a36;border-radius:6px;image-rendering:pixelated;box-shadow:3px 3px 0 rgba(0,0,0,0.3)">
+          </canvas>
+          <div style="text-align:center">
+            <div style="font-size:6px;color:#9aa7a3;margin-bottom:1px">🇵🇭 PH Time</div>
+            <div id="ph-time" style="font-size:9px;color:#3b3a36;line-height:1.5">--:--</div>
+            <div id="ph-date" style="font-size:6px;color:#9aa7a3">---</div>
+          </div>
+        </div>
+
+      </div><!-- end row -->
+    </section>
+
+    <script>
+    // ── Philippine Live Clock ──────────────────────────
+    function updatePHClock() {
+      const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+      const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const h12 = h % 12 || 12;
+      const pad = n => String(n).padStart(2,'0');
+      const el = document.getElementById('ph-time');
+      const de = document.getElementById('ph-date');
+      if (el) el.textContent = pad(h12) + ':' + pad(m) + ':' + pad(s) + ' ' + ampm;
+      const days   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      if (de) de.textContent = days[now.getDay()] + ' ' + now.getDate() + ' ' + months[now.getMonth()];
+    }
+    setInterval(updatePHClock, 1000);
+    updatePHClock();
+
+    // ── Minecraft Day/Night Clock ──────────────────────
+    function drawMCClock() {
+      const canvas = document.getElementById('mc-clock');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = 72, H = 72;
+
+      const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+      const totalSecs = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+      const dayFrac   = totalSecs / 86400;
+
+      // Sun rises at 6am (0.25), sets at 6pm (0.75)
+      const angle = (dayFrac - 0.25) * Math.PI * 2;
+
+      const isNight = dayFrac < 0.2  || dayFrac >= 0.8;
+      const isDawn  = dayFrac >= 0.2 && dayFrac < 0.3;
+      const isDusk  = dayFrac >= 0.7 && dayFrac < 0.8;
+      const isDay   = !isNight && !isDawn && !isDusk;
+
+      // Sky gradient
+      let skyTop, skyMid, skyBot;
+      if (isNight)     { skyTop='#040415'; skyMid='#080820'; skyBot='#0f0f2a'; }
+      else if (isDawn) { skyTop='#1a0a30'; skyMid='#cc4400'; skyBot='#87CEEB'; }
+      else if (isDusk) { skyTop='#0a1a40'; skyMid='#cc3300'; skyBot='#9B59B6'; }
+      else             { skyTop='#1565c0'; skyMid='#1976d2'; skyBot='#42a5f5'; }
+
+      // Draw pixel sky — row by row for that Minecraft look
+      const rowH = 8;
+      const skyColors = isNight
+        ? ['#040415','#06061c','#080820','#0a0a24','#0c0c28','#0f0f2a','#111130','#131335','#151538']
+        : isDawn
+        ? ['#1a0830','#3d1560','#8B2500','#cc4400','#FF6B00','#FF9800','#87CEEB','#90caf9','#bbdefb']
+        : isDusk
+        ? ['#0a1840','#1a2860','#6a0d8a','#cc2200','#FF4500','#FF7043','#9B59B6','#7986cb','#90caf9']
+        : ['#0d47a1','#1565c0','#1976d2','#1e88e5','#2196f3','#42a5f5','#64b5f6','#90caf9','#bbdefb'];
+
+      for (let row = 0; row < 9; row++) {
+        ctx.fillStyle = skyColors[row] || skyBot;
+        ctx.fillRect(0, row * rowH, W, rowH);
+      }
+
+      // Stars at night
+      if (isNight || isDawn) {
+        const starPositions = [[10,8],[25,4],[45,10],[60,6],[15,18],[50,14],[38,7],[55,20],[8,22],[30,16]];
+        starPositions.forEach(([sx, sy]) => {
+          const twinkle = Math.sin(Date.now()*0.001 + sx) > 0;
+          if (twinkle) {
+            ctx.fillStyle = 'rgba(255,255,220,0.9)';
+            ctx.fillRect(sx, sy, 2, 2);
+          }
+        });
+      }
+
+      // Sun / Moon orbit
+      const cx = W/2, cy = (H-16)/2, orbitR = 22;
+      const sx = cx + Math.cos(angle) * orbitR;
+      const sy = cy + Math.sin(angle) * orbitR;
+
+      // Only draw if above ground line (H-16)
+      if (sy < H - 16) {
+        if (!isNight) {
+          // Pixelated SUN
+          // Outer glow
+          ctx.fillStyle = 'rgba(255,200,0,0.25)';
+          ctx.fillRect(sx-9, sy-9, 18, 18);
+          // Main body
+          ctx.fillStyle = '#FFD700';
+          ctx.fillRect(sx-6, sy-6, 12, 12);
+          // Bright center
+          ctx.fillStyle = '#FFF176';
+          ctx.fillRect(sx-3, sy-3, 6, 6);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(sx-1, sy-1, 2, 2);
+          // Pixel rays
+          ctx.fillStyle = '#FFD700';
+          ctx.fillRect(sx-1, sy-10, 2, 3); // top
+          ctx.fillRect(sx-1, sy+7,  2, 3); // bottom
+          ctx.fillRect(sx-10,sy-1,  3, 2); // left
+          ctx.fillRect(sx+7, sy-1,  3, 2); // right
+          ctx.fillRect(sx-8, sy-8,  3, 3); // diagonals
+          ctx.fillRect(sx+5, sy-8,  3, 3);
+          ctx.fillRect(sx-8, sy+5,  3, 3);
+          ctx.fillRect(sx+5, sy+5,  3, 3);
+        } else {
+          // Pixelated MOON
+          ctx.fillStyle = '#E8E8D0';
+          ctx.fillRect(sx-5, sy-5, 10, 10);
+          ctx.fillStyle = '#F5F5DC';
+          ctx.fillRect(sx-3, sy-3, 6,  6);
+          // Crescent shadow
+          ctx.fillStyle = skyColors[~~(sy/rowH)] || skyTop;
+          ctx.fillRect(sx+1, sy-5, 6, 10);
+          // Craters
+          ctx.fillStyle = 'rgba(0,0,0,0.2)';
+          ctx.fillRect(sx-3, sy-2, 2, 2);
+          ctx.fillRect(sx-1, sy+1, 2, 2);
+        }
+      }
+
+      // Horizon glow at dawn/dusk
+      if (isDawn || isDusk) {
+        const glowColor = isDawn ? 'rgba(255,120,0,0.35)' : 'rgba(200,50,0,0.35)';
+        const grd = ctx.createLinearGradient(0, H-30, 0, H-10);
+        grd.addColorStop(0, glowColor);
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, H-30, W, 20);
+      }
+
+      // GROUND STRIP — pixel Minecraft style
+      // Grass top
+      ctx.fillStyle = '#5a9e28';
+      ctx.fillRect(0, H-16, W, 6);
+      // Dirt
+      ctx.fillStyle = '#8B6914';
+      ctx.fillRect(0, H-10, W, 6);
+      // Deep dirt
+      ctx.fillStyle = '#6B4F0F';
+      ctx.fillRect(0, H-4, W, 4);
+      // Grass texture blocks
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      for (let x = 0; x < W; x += 8) ctx.fillRect(x, H-16, 1, 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      for (let x = 4; x < W; x += 8) ctx.fillRect(x, H-16, 1, 3);
+
+      // CLOCK FRAME — wood/gold Minecraft border
+      // Outer wood frame
+      ctx.strokeStyle = '#5D3A00'; ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, W-4, H-4);
+      // Inner gold highlight
+      ctx.strokeStyle = '#DAA520'; ctx.lineWidth = 1;
+      ctx.strokeRect(4, 4, W-8, H-8);
+      // Corner pixels
+      const corners = [[0,0],[W-4,0],[0,H-4],[W-4,H-4]];
+      corners.forEach(([cx2,cy2]) => {
+        ctx.fillStyle = '#3b3a36';
+        ctx.fillRect(cx2, cy2, 4, 4);
+      });
+
+      // Time indicator line at bottom of clock face
+      const fracX = (dayFrac * W);
+      ctx.fillStyle = isNight ? '#E8E8D0' : '#FFD700';
+      ctx.fillRect(Math.max(4, Math.min(W-8, fracX-1)), H-17, 3, 2);
+    }
+
+    setInterval(drawMCClock, 1000);
+    drawMCClock();
+    // Redraw more frequently for smooth star twinkle
+    setInterval(drawMCClock, 200);
+    </script>
+
+    <!-- Explorer -->
+    <section class="explorer panel">
+      <div class="btn" id="map-toggle" style="max-width:200px">🐾 Show Pets</div>
+
+      <h3 id="biomes-heading">🌍 Biomes</h3>
+      <div class="tiles" id="biomes"></div>
+
+      <h3 id="pets-heading" style="display:none">🐾 Pets</h3>
+      <div class="tiles" id="pets" style="display:none"></div>
+    </section>
+
+  </main>
+</div><!-- .wrap -->
+
+<script src="biomes.js"></script>
+<script src="script.js"></script>
+
+<!-- ══════════════════════════════════════════
+     EXTRAS MODAL
+══════════════════════════════════════════ -->
+<div id="extras-overlay" onclick="closeExtras()" style="
+  display:none; position:fixed; inset:0; z-index:9990;
+  background:rgba(0,0,0,0.6); backdrop-filter:blur(3px);
+  align-items:flex-end; justify-content:center;
+  padding-bottom:0;
+"></div>
+
+<div id="extras-modal" style="
+  display:none; position:fixed; bottom:-400px; left:50%;
+  transform:translateX(-50%);
+  width:min(420px,95vw); z-index:9991;
+  background:rgba(231,223,198,0.97);
+  border:5px solid #3b3a36;
+  border-bottom:none;
+  border-radius:16px 16px 0 0;
+  box-shadow:0 -6px 24px rgba(0,0,0,0.4);
+  padding:20px 20px 32px;
+  font-family:'Press Start 2P',monospace;
+  transition:bottom 0.35s cubic-bezier(.22,.68,0,1.2);
+">
+  <!-- Handle bar -->
+  <div style="width:40px;height:5px;background:#9aa7a3;border-radius:3px;margin:0 auto 16px;"></div>
+
+  <!-- Title -->
+  <div style="text-align:center;font-size:11px;margin-bottom:4px;">✨ Extras</div>
+  <div style="text-align:center;font-size:7px;color:#9aa7a3;margin-bottom:20px;">More fun stuff!</div>
+
+  <!-- Extras options -->
+  <div style="display:flex;flex-direction:column;gap:10px;">
+
+    <!-- Flappy Steve -->
+    <div onclick="window.open('Game.html','_blank');closeExtras();" style="
+      display:flex;align-items:center;gap:14px;
+      padding:14px 16px;border:4px solid #3b3a36;border-radius:10px;
+      background:linear-gradient(135deg,#a5d6a7,#66bb6a);
+      cursor:pointer;box-shadow:3px 3px 0 rgba(0,0,0,0.2);
+      transition:transform .1s;
+    " onmousedown="this.style.transform='translate(2px,2px)'" onmouseup="this.style.transform=''">
+      <div style="font-size:28px;flex-shrink:0;">🕹️</div>
+      <div>
+        <div style="font-size:9px;margin-bottom:4px;">Flappy Steve</div>
+        <div style="font-size:6px;color:rgba(0,0,0,0.55);line-height:1.6;">Dodge obstacles, collect XP orbs,<br>survive the Minecraft world!</div>
+      </div>
+      <div style="margin-left:auto;font-size:12px;opacity:0.5;">▶</div>
+    </div>
+
+    <!-- Game Hub -->
+    <div onclick="window.open('GameHub.html','_blank');closeExtras();" style="
+      display:flex;align-items:center;gap:14px;
+      padding:14px 16px;border:4px solid #3b3a36;border-radius:10px;
+      background:linear-gradient(135deg,#ffe082,#ffca28);
+      cursor:pointer;box-shadow:3px 3px 0 rgba(0,0,0,0.2);
+      transition:transform .1s;
+    " onmousedown="this.style.transform='translate(2px,2px)'" onmouseup="this.style.transform=''">
+      <div style="font-size:28px;flex-shrink:0;">🎮</div>
+      <div>
+        <div style="font-size:9px;margin-bottom:4px;">Game Hub</div>
+        <div style="font-size:6px;color:rgba(0,0,0,0.55);line-height:1.6;">Trivia, memory, word games<br>and more — all earn real XP!</div>
+      </div>
+      <div style="margin-left:auto;font-size:12px;opacity:0.5;">▶</div>
+    </div>
+
+    <!-- Discord -->
+    <div onclick="window.open('https://discord.gg/NYnjmvF6T','_blank');closeExtras();" style="
+      display:flex;align-items:center;gap:14px;
+      padding:14px 16px;border:4px solid #3949ab;border-radius:10px;
+      background:linear-gradient(135deg,#9fa8da,#7986cb);color:#fff;
+      cursor:pointer;box-shadow:3px 3px 0 rgba(0,0,0,0.2);
+      transition:transform .1s;
+    " onmousedown="this.style.transform='translate(2px,2px)'" onmouseup="this.style.transform=''">
+      <div style="font-size:28px;flex-shrink:0;">💬</div>
+      <div>
+        <div style="font-size:9px;margin-bottom:4px;">Discord Server</div>
+        <div style="font-size:6px;color:rgba(255,255,255,0.75);line-height:1.6;">Chat with friends, share progress<br>and hang out!</div>
+      </div>
+      <div style="margin-left:auto;font-size:12px;opacity:0.5;">▶</div>
+    </div>
+
+  </div>
+
+  <!-- Close -->
+  <div onclick="closeExtras()" style="
+    text-align:center;margin-top:14px;font-size:7px;
+    color:#9aa7a3;cursor:pointer;padding:6px;
+  ">▼ Close</div>
+</div>
+
+<script>
+function openExtras() {
+  const overlay = document.getElementById('extras-overlay');
+  const modal   = document.getElementById('extras-modal');
+  overlay.style.display = 'flex';
+  modal.style.display   = 'block';
+  // Trigger slide-up animation
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      modal.style.bottom = '0px';
+    });
+  });
+  // Prevent body scroll on mobile
+  document.body.style.overflow = 'hidden';
+}
+
+function closeExtras() {
+  const overlay = document.getElementById('extras-overlay');
+  const modal   = document.getElementById('extras-modal');
+  modal.style.bottom = '-400px';
+  setTimeout(() => {
+    overlay.style.display = 'none';
+    modal.style.display   = 'none';
+    document.body.style.overflow = '';
+  }, 360);
+}
+
+// Close on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeExtras();
+});
+</script>
+
+
+<!-- ══ UI HIDE/SHOW BUTTON ══ -->
+<div id="ui-toggle-btn" onclick="toggleUI()">
+  <span class="arrow">▼</span>
+  <span id="toggle-label">Hide UI</span>
+</div>
+
+<script>
+  let uiVisible = true;
+  function toggleUI() {
+    uiVisible = !uiVisible;
+    const wrap = document.querySelector('.wrap');
+    const btn  = document.getElementById('ui-toggle-btn');
+    const lbl  = document.getElementById('toggle-label');
+    if (!uiVisible) {
+      wrap.classList.add('ui-hidden');
+      btn.classList.add('hidden-ui');
+      lbl.textContent = 'Show UI';
+    } else {
+      wrap.classList.remove('ui-hidden');
+      btn.classList.remove('hidden-ui');
+      lbl.textContent = 'Hide UI';
+    }
+  }
+</script>
+
+</body>
+</html>
